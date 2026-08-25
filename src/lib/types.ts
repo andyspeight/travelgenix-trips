@@ -48,24 +48,68 @@ export interface Trip {
   legacy_widget_id: string | null;
 }
 
-/** The long-form body. Matches what the Tour Builder already emits. */
+/**
+ * The long-form body of a trip.
+ *
+ * Widened on 25 Aug 2026 when the Kenya tour was migrated across and the first
+ * draft turned out to drop real content: the itinerary-at-a-glance table, the
+ * priced extras, the per-day optional activities and the free-form practical
+ * sections (packing list, visa notes, the vehicle). Every field here exists
+ * because a real tour carried it, not because it seemed likely.
+ */
 export interface TripContent {
   overview?: string;
+  durationText?: string;
+  priceNote?: string;
   highlights?: string[];
+  /** The itinerary-at-a-glance table: one row per day. */
+  glance?: TripGlanceRow[];
+  days?: TripDay[];
   included?: string[];
   excluded?: string[];
-  days?: TripDay[];
+  /** Trip-wide priced extras. A zero price means "not priced", not free. */
+  extras?: TripExtra[];
+  /** Free-form practical sections: packing list, visas, the vehicle. */
+  sections?: TripSection[];
   gallery?: string[];
-  packingList?: string[];
-  footnotes?: string[];
+}
+
+export interface TripGlanceRow {
+  day: string;
+  date?: string;
+  destination?: string;
+  accommodation?: string;
 }
 
 export interface TripDay {
+  label?: string;
+  date?: string;
   title: string;
   body?: string;
   images?: string[];
-  facts?: Record<string, string>;
+  /** Accommodation, meals, driving time, altitude. Ordered, so an array of
+   *  pairs rather than an object: a Record loses the author's ordering. */
+  facts?: TripFact[];
+  optionalActivities?: TripExtra[];
 }
+
+export interface TripFact {
+  label: string;
+  value: string;
+}
+
+export interface TripExtra {
+  name: string;
+  pricePence?: number | null;
+  note?: string;
+  recommended?: boolean;
+}
+
+/** Three shapes cover everything the Tour Builder emits today. */
+export type TripSection =
+  | { type: 'text'; heading: string; body: string }
+  | { type: 'feature'; heading: string; body: string; image?: string }
+  | { type: 'columns'; heading: string; columns: Array<{ heading: string; items: string[] }> };
 
 export interface Departure {
   id: string;

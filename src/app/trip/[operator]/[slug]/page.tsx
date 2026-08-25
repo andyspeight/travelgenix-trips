@@ -15,7 +15,7 @@ import { getPublishedTrip, listOpenDepartures } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
 import { format as money } from '@/lib/money';
 import { tripsDbConfigured } from '@/lib/supabase';
-import type { Departure, TripContent } from '@/lib/types';
+import type { Departure, TripContent, TripSection } from '@/lib/types';
 
 // Matches the 60s CDN cache the widget availability endpoint already uses, so
 // the origin is hit about once a minute per trip however busy the page gets.
@@ -62,7 +62,11 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
 
       <p className="t-operator">{operator.name}</p>
       <h1 className="t-title">{trip.title}</h1>
-      {trip.location && <p className="t-location">{trip.location}</p>}
+      {(trip.location || content.durationText) && (
+        <p className="t-location">
+          {[trip.location, content.durationText].filter(Boolean).join(' · ')}
+        </p>
+      )}
       {trip.summary && <p className="t-summary">{trip.summary}</p>}
 
       {content.overview && <p>{content.overview}</p>}
@@ -103,10 +107,34 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
             })}
           </ul>
         )}
+        {content.priceNote && <p className="t-quiet t-note">{content.priceNote}</p>}
         <p className="t-quiet t-book">
           Booking opens shortly. In the meantime, get in touch with {operator.name} to reserve a place.
         </p>
       </section>
+
+      {content.glance && content.glance.length > 0 && (
+        <section>
+          <h2>At a glance</h2>
+          <div className="t-scroll">
+            <table className="t-glance">
+              <thead>
+                <tr><th scope="col">Day</th><th scope="col">Date</th><th scope="col">Where</th><th scope="col">Staying at</th></tr>
+              </thead>
+              <tbody>
+                {content.glance.map((g, i) => (
+                  <tr key={i}>
+                    <th scope="row">{g.day}</th>
+                    <td>{g.date}</td>
+                    <td>{g.destination}</td>
+                    <td>{g.accommodation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {content.days && content.days.length > 0 && (
         <section>
@@ -114,8 +142,33 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
           <ol className="t-days">
             {content.days.map((day, i) => (
               <li key={i}>
+                {day.label && <span className="t-day-label">{day.label}{day.date ? ` · ${day.date}` : ''}</span>}
                 <h3>{day.title}</h3>
                 {day.body && <p>{day.body}</p>}
+
+                {day.facts && day.facts.length > 0 && (
+                  <dl className="t-facts">
+                    {day.facts.map((f, k) => (
+                      <div key={k}>
+                        <dt>{f.label}</dt>
+                        <dd>{f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+
+                {day.optionalActivities && day.optionalActivities.length > 0 && (
+                  <ul className="t-extras">
+                    {day.optionalActivities.map((o, k) => (
+                      <li key={k}>
+                        <span>{o.name}</span>
+                        <span className="t-extra-price">
+                          {money(o.pricePence ?? null, trip.currency) ?? 'On request'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ol>
@@ -138,7 +191,94 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
           )}
         </section>
       )}
+      {content.extras && content.extras.length > 0 && (
+        <section>
+          <h2>Optional extras</h2>
+          <ul className="t-extras t-extras--wide">
+            {content.extras.map((x, i) => (
+              <li key={i}>
+                <span>
+                  {x.name}
+                  {x.recommended && <em className="t-flag" style={{ color: accent }}>Recommended</em>}
+                  {x.note && <small>{x.note}</small>}
+                </span>
+                <span className="t-extra-price">
+                  {/* Zero is unpriced, not free. */}
+                  {money(x.pricePence ?? null, trip.currency) ?? 'On request'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {content.sections?.map((section, i) => (
+        <Section key={i} section={section} />
+      ))}
+
+      {content.gallery && content.gallery.length > 0 && (
+        <section>
+          <h2>Gallery</h2>
+          <div className="t-gallery">
+            {content.gallery.map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={src} alt="" loading="lazy" />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
+  );
+}
+
+/** The three practical-section shapes the Tour Builder emits. */
+function Section({ section }: { section: TripSection }) {
+  if (section.type === 'columns') {
+    return (
+      <section>
+        <h2>{section.heading}</h2>
+        <div className="t-two-up">
+          {section.columns.map((col, i) => (
+            <div key={i}>
+              <h3>{col.heading}</h3>
+              <ul className="t-bullets">{col.items.map((it, k) => <li key={k}>{it}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (section.type === 'feature') {
+    return (
+      <section className="t-feature">
+        {section.image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={section.image} alt="" loading="lazy" />
+        )}
+        <div>
+          <h2>{section.heading}</h2>
+          <Paragraphs body={section.body} />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <h2>{section.heading}</h2>
+      <Paragraphs body={section.body} />
+    </section>
+  );
+}
+
+/** Author copy carries real blank lines. Split rather than dangerously setting
+ *  HTML, so a paragraph break survives and markup never does. */
+function Paragraphs({ body }: { body: string }) {
+  return (
+    <>
+      {body.split(/\n{2,}/).map((para, i) => <p key={i}>{para}</p>)}
+    </>
   );
 }
 
