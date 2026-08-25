@@ -9,13 +9,15 @@ transaction.
 
 ## Status
 
-**Phase 0, foundations.** The app boots, resolves a session over the existing
-Travelgenix SSO, and reads the Trips database. There is no booking engine yet.
+**Phase 1.** Trips and departures are real records. An operator signs in with
+their existing Travelgenix account, creates a trip, adds departures, publishes
+it, and gets a public page plus a read API the embeddable widgets can point at.
+There is no booking engine yet: taking money is phase 2.
 
 | Phase | | Status |
 |---|---|---|
 | 0 | Foundations | done |
-| 1 | Trips and departures as first-class records | next |
+| 1 | Trips and departures as first-class records | done |
 | 2 | Deposits and checkout | pending Stripe setup |
 | 3 | Payment plans | pending Stripe setup |
 | 4 | Travellers, forms, waivers | ready |
@@ -52,6 +54,10 @@ instalments, travellers, forms, waivers, signatures and documents.
 
 RLS is on for every table with no policies. The service role is the only way in
 and the browser never connects.
+
+Ownership is enforced in the query, not by the caller: every write filters on
+`operator_id` as well as `id`, so a forged id patches zero rows rather than
+succeeding because a guard was forgotten.
 
 ## Conventions
 

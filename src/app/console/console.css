@@ -1,0 +1,81 @@
+/* The operator console. Travelgenix-branded, governed by travelgenix-design.
+   Public trip pages do NOT use this: they are operator-branded. */
+
+.c-shell { max-width: 940px; margin: 0 auto; padding: 0 24px 80px; }
+
+.c-bar {
+  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  padding: 22px 0 20px; border-bottom: 1px solid var(--tg-rule); margin-bottom: 32px;
+}
+.c-bar .c-brand { font-weight: 700; letter-spacing: -.01em; }
+.c-bar .c-who { color: var(--tg-muted); font-size: 13px; margin-left: auto; }
+
+h1 { font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 6px; text-wrap: balance; }
+h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
+.c-sub { color: var(--tg-ink-2); margin: 0 0 28px; max-width: 62ch; }
+
+/* Buttons */
+.c-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: 14px; font-weight: 500;
+  padding: 9px 15px; border-radius: var(--tg-radius); cursor: pointer;
+  border: 1px solid var(--tg-rule); background: var(--tg-surface); color: var(--tg-ink);
+  text-decoration: none;
+}
+.c-btn:hover { border-color: var(--tg-ink-2); }
+.c-btn--primary { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+.c-btn--primary:hover { filter: brightness(1.08); border-color: var(--tg-accent); }
+.c-btn--quiet { border-color: transparent; color: var(--tg-muted); padding-inline: 8px; }
+.c-btn--quiet:hover { color: var(--tg-danger); border-color: transparent; }
+.c-btn[disabled] { opacity: .55; cursor: not-allowed; }
+
+/* Forms */
+.c-field { display: block; margin-bottom: 18px; }
+.c-field > span { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; }
+.c-field .c-hint { display: block; font-weight: 400; color: var(--tg-muted); margin: 4px 0 0; }
+.c-field input, .c-field select, .c-field textarea {
+  width: 100%; font: inherit; font-size: 15px; padding: 9px 11px;
+  border: 1px solid var(--tg-rule); border-radius: var(--tg-radius);
+  background: var(--tg-surface); color: var(--tg-ink);
+}
+.c-field textarea { min-height: 90px; resize: vertical; }
+.c-field input:focus, .c-field select:focus, .c-field textarea:focus {
+  outline: 2px solid var(--tg-accent); outline-offset: 1px; border-color: transparent;
+}
+.c-field--bad input, .c-field--bad select, .c-field--bad textarea { border-color: var(--tg-danger); }
+.c-err { color: var(--tg-danger); font-size: 13px; margin: 5px 0 0; }
+.c-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 16px; }
+.c-actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; flex-wrap: wrap; }
+
+/* Notices */
+.c-note {
+  border: 1px solid var(--tg-rule); border-left-width: 3px;
+  padding: 13px 15px; border-radius: var(--tg-radius);
+  background: var(--tg-surface); margin: 0 0 20px; font-size: 15px;
+}
+.c-note--ok { border-left-color: var(--tg-accent); }
+.c-note--bad { border-left-color: var(--tg-danger); color: var(--tg-danger); }
+.c-note--calm { border-left-color: var(--tg-muted); color: var(--tg-ink-2); }
+
+/* Lists */
+.c-list { list-style: none; padding: 0; margin: 0; }
+.c-list li {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding: 15px 0; border-bottom: 1px solid var(--tg-rule);
+}
+.c-list li:first-child { border-top: 1px solid var(--tg-rule); }
+.c-list .c-name { font-weight: 600; }
+.c-list .c-meta { color: var(--tg-muted); font-size: 13px; }
+.c-list .c-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+.c-pill {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid currentColor;
+}
+.c-pill--draft { color: var(--tg-muted); }
+.c-pill--published { color: var(--tg-accent); }
+.c-pill--closed, .c-pill--cancelled { color: var(--tg-danger); }
+.c-pill--open { color: var(--tg-accent); }
+
+.c-empty { color: var(--tg-muted); padding: 26px 0; }
+.c-money { font-variant-numeric: tabular-nums; }
