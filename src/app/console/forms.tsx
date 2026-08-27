@@ -5,9 +5,9 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveTripAction, saveDepartureAction } from './actions';
+import { saveTripAction, saveDepartureAction, savePackageAction } from './actions';
 import { EMPTY_STATE, type ActionState } from '@/lib/action-state';
-import type { Trip, Departure } from '@/lib/types';
+import type { Trip, Departure, Package } from '@/lib/types';
 import { MediaField } from './media-picker';
 
 function Submit({ label, busy }: { label: string; busy: string }) {
@@ -162,6 +162,69 @@ export function DepartureForm({ tripId, departure }: { tripId: string; departure
 
       <div className="c-actions">
         <Submit label={departure ? 'Save departure' : 'Add departure'} busy="Saving..." />
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export function PackageForm({ tripId, pkg }: { tripId: string; pkg?: Package }) {
+  const [state, action] = useActionState(savePackageAction, EMPTY_STATE);
+  const [image, setImage] = useState(pkg?.image_url ?? '');
+  const e = state.errors;
+
+  return (
+    <form action={action} noValidate>
+      <Notice state={state} />
+      <input type="hidden" name="trip_id" value={tripId} />
+      {pkg && <input type="hidden" name="id" value={pkg.id} />}
+
+      <div className="c-row">
+        <Field name="name" label="Name" error={e.name}>
+          <input id="name" name="name" defaultValue={pkg?.name ?? ''} placeholder="Twin share" maxLength={160} required />
+        </Field>
+        <Field name="occupancy" label="Sleeps" hint="People sharing." error={e.occupancy}>
+          <input id="occupancy" name="occupancy" type="number" min={1} defaultValue={pkg?.occupancy ?? 1} />
+        </Field>
+      </div>
+
+      <div className="c-row">
+        <Field
+          name="price_pence"
+          label="Price per person"
+          hint="Blank inherits the departure price."
+          error={e.price_pence}
+        >
+          <input id="price_pence" name="price_pence" inputMode="decimal" defaultValue={pounds(pkg?.price_pence)} />
+        </Field>
+        <Field name="capacity" label="How many available" hint="Blank for no limit." error={e.capacity}>
+          <input id="capacity" name="capacity" type="number" min={0} defaultValue={pkg?.capacity ?? ''} />
+        </Field>
+      </div>
+
+      <Field name="description" label="Description" error={e.description}>
+        <textarea id="description" name="description" defaultValue={pkg?.description ?? ''} maxLength={2000} />
+      </Field>
+
+      <div className={`c-field${e.image_url ? ' c-field--bad' : ''}`}>
+        <span>Photo</span>
+        <input type="hidden" name="image_url" value={image} />
+        <MediaField value={image} onChange={setImage} accept="image" />
+        {e.image_url && <p className="c-err">{e.image_url}</p>}
+      </div>
+
+      <div className="c-row">
+        <Field name="info_url" label="More info link" hint="An https link travellers can open." error={e.info_url}>
+          <input id="info_url" name="info_url" defaultValue={pkg?.info_url ?? ''} placeholder="https://..." />
+        </Field>
+        <Field name="sort_order" label="Order" hint="Lower shows first." error={e.sort_order}>
+          <input id="sort_order" name="sort_order" type="number" defaultValue={pkg?.sort_order ?? 0} />
+        </Field>
+      </div>
+
+      <div className="c-actions">
+        <Submit label={pkg ? 'Save package' : 'Add package'} busy="Saving..." />
       </div>
     </form>
   );

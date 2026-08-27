@@ -4,14 +4,14 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip } from '@/lib/repo';
 import { format as money } from '@/lib/money';
-import { TripForm, DepartureForm } from '../../forms';
+import { TripForm, DepartureForm, PackageForm } from '../../forms';
 import { ContentEditor } from '../../content-editor';
 import { RegistrationEditor } from '../../registration-editor';
 import { SignInPrompt, NoOperator } from '../../states';
-import { setTripStatusAction, removeDepartureAction } from '../../actions';
-import type { Departure } from '@/lib/types';
+import { setTripStatusAction, removeDepartureAction, removePackageAction } from '../../actions';
+import type { Departure, Package } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,9 +33,10 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   const openCount = departures.filter((d) => d.status === 'open').length;
   const publicUrl = `/trip/${operator.slug}/${trip.slug}`;
 
-  const [regForm, waiver] = await Promise.all([
+  const [regForm, waiver, packages] = await Promise.all([
     getFormForTrip(trip.id, operator.id),
     getWaiverForTrip(trip.id, operator.id),
+    getPackagesForTrip(trip.id, operator.id),
   ]);
 
   return (
@@ -112,6 +113,29 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
 
       <h2 style={{ fontSize: '1rem' }}>Add a departure</h2>
       <DepartureForm tripId={trip.id} />
+
+      <h2>Packages</h2>
+      <p className="c-sub" style={{ marginTop: '-6px' }}>
+        Room types and options a traveller picks when they book, each with its own
+        price, photo and link. A package with its own price sets what that traveller pays.
+      </p>
+      {packages.length === 0 ? (
+        <p className="c-empty">No packages yet. Without any, a booking uses the departure price.</p>
+      ) : (
+        packages.map((p) => (
+          <div key={p.id} className="ce-section">
+            <PackageForm tripId={trip.id} pkg={p} />
+            <form action={removePackageAction} style={{ marginTop: 8 }}>
+              <input type="hidden" name="trip_id" value={trip.id} />
+              <input type="hidden" name="id" value={p.id} />
+              <button className="c-btn c-btn--quiet" type="submit">Remove this package</button>
+            </form>
+          </div>
+        ))
+      )}
+
+      <h2 style={{ fontSize: '1rem' }}>Add a package</h2>
+      <PackageForm tripId={trip.id} />
     </>
   );
 }
