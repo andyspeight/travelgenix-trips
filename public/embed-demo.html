@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Trips embed demo</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f2937; background: #f6f7f9; margin: 0; }
+  .page { max-width: 780px; margin: 0 auto; padding: 48px 24px 120px; }
+  .fake-nav { font-weight: 700; letter-spacing: -.01em; color: #111827; margin-bottom: 40px; }
+  h1 { font-size: 2rem; letter-spacing: -.02em; margin: 0 0 10px; }
+  p.lede { color: #4b5563; line-height: 1.6; max-width: 60ch; margin: 0 0 32px; }
+  .embed-wrap { display: flex; justify-content: flex-start; }
+  .note { margin-top: 40px; font-size: 13px; color: #6b7280; }
+  code { background: #eef0f3; padding: 2px 6px; border-radius: 5px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="fake-nav">Sunrise Safaris &nbsp;·&nbsp; a pretend operator site</div>
+    <h1>Our featured trip</h1>
+    <p class="lede">
+      This page stands in for an operator's own website. The card below is the Travelgenix Trips
+      embed, dropped in with one container and one script. Reserve opens the booking in an overlay,
+      so the visitor never leaves this page.
+    </p>
+
+    <div class="embed-wrap">
+      <!-- The whole embed: a container plus one script. -->
+      <div data-tg-trip="8040a51f-c4da-47ae-9c39-1dcb44aa1e1f"></div>
+    </div>
+
+    <p class="note">
+      Snippet: <code>&lt;div data-tg-trip="TRIP_ID"&gt;&lt;/div&gt;</code> then
+      <code>&lt;script src="/embed.js" defer&gt;&lt;/script&gt;</code>.
+    </p>
+  </div>
+
+  <script src="/embed.js" defer></script>
+</body>
+</html>
