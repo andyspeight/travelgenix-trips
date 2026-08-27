@@ -38,6 +38,7 @@ export default async function BookingsPage() {
       <nav className="c-tabs">
         <a href="/console">Trips</a>
         <a href="/console/bookings" aria-current="page">Bookings</a>
+        <a href="/console/reports">Reports</a>
       </nav>
 
       <h1>Bookings</h1>

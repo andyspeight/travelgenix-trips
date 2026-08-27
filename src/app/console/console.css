@@ -299,3 +299,14 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
   background: none; border: 0; padding: 0; cursor: pointer; font-weight: 500; }
 .mt-sort:hover { color: var(--tg-ink); }
 .mt-sort:focus-visible { outline: 2px solid var(--tg-accent); outline-offset: 2px; border-radius: 3px; }
+
+/* ---------------------------------------------------------------------------
+   Reports — the cross-trip money stat row.
+   --------------------------------------------------------------------------- */
+.c-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+  background: var(--tg-rule); border: 1px solid var(--tg-rule); border-radius: var(--tg-radius);
+  overflow: hidden; margin: 0 0 30px; }
+.c-stats > div { background: var(--tg-surface); padding: 16px 18px; }
+.c-stats dt { color: var(--tg-muted); margin: 0 0 6px; font-size: 12px; letter-spacing: .02em; }
+.c-stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.3rem; letter-spacing: -.01em; }
+.c-stats .c-stat-accent { color: var(--tg-accent); }

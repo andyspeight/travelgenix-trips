@@ -947,6 +947,81 @@ export async function getTripManage(tripId: string, operatorId: string): Promise
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Reporting — money across ALL of an operator's trips (cross-trip dashboard).
+// ---------------------------------------------------------------------------
+
+export interface ReportRow {
+  trip_id: string;
+  title: string;
+  currency: string;
+  bookings: number;
+  heads: number;
+  booked_pence: number;
+  collected_pence: number;
+  outstanding_pence: number;
+}
+
+export interface OperatorReport {
+  rows: ReportRow[];
+  totals: { bookings: number; heads: number; booked_pence: number; collected_pence: number; outstanding_pence: number };
+  currency: string;
+  mixedCurrency: boolean;
+}
+
+export async function getOperatorReport(operatorId: string): Promise<OperatorReport> {
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?operator_id=eq.${operatorId}` +
+      `&select=status,total_pence,deposit_pence,currency,party_size,` +
+      `departure:gt_departures!inner(trip:gt_trips(id,title))`,
+  ).catch(() => null);
+
+  const byTrip = new Map<string, ReportRow>();
+  const currencies = new Set<string>();
+
+  for (const r of rows ?? []) {
+    if (!LIVE_STATUSES.has(String(r.status))) continue;
+    const dep = (r.departure ?? {}) as Record<string, unknown>;
+    const trip = (dep.trip ?? {}) as Record<string, unknown>;
+    const tid = String(trip.id ?? '');
+    if (!tid) continue;
+    const currency = String(r.currency ?? 'gbp');
+    currencies.add(currency);
+
+    let row = byTrip.get(tid);
+    if (!row) {
+      row = { trip_id: tid, title: String(trip.title ?? 'Trip'), currency, bookings: 0, heads: 0, booked_pence: 0, collected_pence: 0, outstanding_pence: 0 };
+      byTrip.set(tid, row);
+    }
+    const total = (r.total_pence as number) ?? 0;
+    const deposit = (r.deposit_pence as number) ?? 0;
+    const status = String(r.status);
+    const collected = status === 'paid' ? total : status === 'deposit_paid' ? deposit : 0;
+    row.bookings += 1;
+    row.heads += (r.party_size as number) ?? 0;
+    row.booked_pence += total;
+    row.collected_pence += collected;
+    row.outstanding_pence += Math.max(0, total - collected);
+  }
+
+  const rowsArr = [...byTrip.values()].sort((a, b) => b.booked_pence - a.booked_pence);
+  const totals = rowsArr.reduce(
+    (t, r) => ({
+      bookings: t.bookings + r.bookings, heads: t.heads + r.heads,
+      booked_pence: t.booked_pence + r.booked_pence,
+      collected_pence: t.collected_pence + r.collected_pence,
+      outstanding_pence: t.outstanding_pence + r.outstanding_pence,
+    }),
+    { bookings: 0, heads: 0, booked_pence: 0, collected_pence: 0, outstanding_pence: 0 },
+  );
+
+  return {
+    rows: rowsArr, totals,
+    currency: [...currencies][0] ?? 'gbp',
+    mixedCurrency: currencies.size > 1,
+  };
+}
+
 /** The statuses an operator may set by hand from the Manage table. These are the
  *  offline-payment equivalents of WeTravel's bulk actions (bank transfer taken →
  *  mark paid); real online payment will flip these through Stripe later. */

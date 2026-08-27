@@ -26,6 +26,7 @@ export default async function ConsolePage() {
       <nav className="c-tabs">
         <a href="/console" aria-current="page">Trips</a>
         <a href="/console/bookings">Bookings</a>
+        <a href="/console/reports">Reports</a>
       </nav>
 
       <h1>Trips</h1>
