@@ -21,7 +21,8 @@ import { slugify } from './validate.ts';
 import type { TripInput, DepartureInput } from './validate.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
-import type { Operator, Trip, Departure, TripStatus } from './types.ts';
+import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
+import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -434,6 +435,346 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
     operator_name: String(op.name ?? 'the operator'),
     starts_on: (dep.starts_on as string) ?? null,
     ends_on: (dep.ends_on as string) ?? null,
+  };
+}
+
+
+// ---------------------------------------------------------------------------
+//  Phase 4 — the people. Custom forms, waivers, and traveller registration.
+//
+//  Two trust models meet here. The operator-facing reads/writes are gated on
+//  operator_id through the owning trip, exactly like the rest of this file. The
+//  traveller-facing registration is gated on the booking REFERENCE instead: it
+//  is the same bearer token the confirmation page uses, and every id the browser
+//  sends is re-resolved against the booking the reference names, never trusted.
+// ---------------------------------------------------------------------------
+
+/** One custom form per trip. Read without an ownership check because callers on
+ *  both sides (the operator editor, and registration via the booking) have
+ *  already established their right to the trip. */
+async function formByTrip(tripId: string): Promise<FormRow | null> {
+  if (!isUuid(tripId)) return null;
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_forms?trip_id=eq.${tripId}&select=id,trip_id,name,schema&order=created_at.asc&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+  return {
+    id: String(r.id), trip_id: String(r.trip_id), name: String(r.name ?? 'Registration'),
+    schema: Array.isArray(r.schema) ? (r.schema as RegField[]) : [],
+  };
+}
+
+/** The current (highest-version) waiver for a trip, or null. */
+async function waiverByTrip(tripId: string): Promise<Waiver | null> {
+  if (!isUuid(tripId)) return null;
+  const rows = await sbRequest<Waiver[]>(
+    `gt_waivers?trip_id=eq.${tripId}&select=*&order=version.desc&limit=1`,
+  ).catch(() => null);
+  return rows?.[0] ?? null;
+}
+
+/** Operator-gated reads for the trip editor. */
+export async function getFormForTrip(tripId: string, operatorId: string): Promise<FormRow | null> {
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  return formByTrip(tripId);
+}
+
+export async function getWaiverForTrip(tripId: string, operatorId: string): Promise<Waiver | null> {
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  return waiverByTrip(tripId);
+}
+
+/** Save the trip's custom form. An empty schema removes the form. Ownership is
+ *  on the trip, so a forged trip id writes nothing. */
+export async function saveForm(tripId: string, operatorId: string, schema: RegField[]): Promise<boolean> {
+  if (!(await getTripOwned(tripId, operatorId))) return false;
+  const existing = await formByTrip(tripId);
+
+  if (schema.length === 0) {
+    if (existing) await sbRequest(`gt_forms?id=eq.${existing.id}`, { method: 'DELETE' });
+    return true;
+  }
+
+  if (existing) {
+    await sbUpdate('gt_forms', `id=eq.${existing.id}`, { schema, updated_at: nowIso() });
+  } else {
+    await sbInsert('gt_forms', { trip_id: tripId, name: 'Registration', schema });
+  }
+  return true;
+}
+
+async function waiverSignatureCount(waiverId: string): Promise<number> {
+  const rows = await sbRequest<Array<{ id: string }>>(
+    `gt_signatures?waiver_id=eq.${waiverId}&select=id&limit=1`,
+  ).catch(() => null);
+  return rows?.length ?? 0;
+}
+
+/**
+ * Save the trip's waiver. Versioning protects what people signed:
+ *   - no waiver yet          -> create version 1
+ *   - body unchanged         -> patch title / mandatory on the current row
+ *   - body changed, unsigned -> edit the current row in place (no version churn
+ *                               while it is still being written)
+ *   - body changed, signed   -> a NEW version, so the signed text is never
+ *                               rewritten under a signature
+ * An empty body removes an UNSIGNED waiver; a signed one cannot be un-said, so
+ * it is left in place.
+ */
+export async function saveWaiver(
+  tripId: string,
+  operatorId: string,
+  input: WaiverInput | null,
+): Promise<boolean> {
+  if (!(await getTripOwned(tripId, operatorId))) return false;
+  const current = await waiverByTrip(tripId);
+
+  if (!input) {
+    if (current && (await waiverSignatureCount(current.id)) === 0) {
+      await sbRequest(`gt_waivers?id=eq.${current.id}`, { method: 'DELETE' });
+    }
+    return true;
+  }
+
+  if (!current) {
+    await sbInsert('gt_waivers', {
+      operator_id: operatorId, trip_id: tripId,
+      title: input.title, body: input.body, version: 1, is_mandatory: input.is_mandatory,
+    });
+    return true;
+  }
+
+  const bodyChanged = current.body !== input.body;
+  if (bodyChanged && (await waiverSignatureCount(current.id)) > 0) {
+    await sbInsert('gt_waivers', {
+      operator_id: operatorId, trip_id: tripId,
+      title: input.title, body: input.body, version: current.version + 1, is_mandatory: input.is_mandatory,
+    });
+  } else {
+    await sbUpdate('gt_waivers', `id=eq.${current.id}`, {
+      title: input.title, body: input.body, is_mandatory: input.is_mandatory,
+    });
+  }
+  return true;
+}
+
+// --- traveller-facing registration, gated on the booking reference ----------
+
+export interface RegistrationContext {
+  booking: {
+    id: string; reference: string; status: string; party_size: number; currency: string;
+    operator_id: string | null; trip_id: string;
+    trip_title: string; operator_name: string;
+    starts_on: string | null; ends_on: string | null;
+  };
+  travellers: Traveller[];
+  form: FormRow | null;
+  waiver: Waiver | null;
+  /** Prefill and completion inputs, as plain arrays for the client boundary. */
+  responses: Array<{ traveller_id: string | null; answers: Record<string, string> }>;
+  signatures: Array<{ traveller_id: string | null }>;
+}
+
+/** Everything the registration page (and the operator manifest) needs, resolved
+ *  from a booking reference. Never lists another booking: every follow-up query
+ *  is scoped to the one booking the reference names. */
+export async function getRegistrationContext(reference: string): Promise<RegistrationContext | null> {
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
+      `&select=id,reference,status,party_size,currency,operator_id,` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(id,title,operator:gt_operators(name)))&limit=1`,
+  ).catch(() => null);
+
+  const r = rows?.[0];
+  if (!r) return null;
+
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const tripId = String(trip.id ?? '');
+  if (!isUuid(tripId)) return null;
+
+  const bookingId = String(r.id);
+  const [travellers, form, waiver] = await Promise.all([
+    sbRequest<Traveller[]>(
+      `gt_travellers?booking_id=eq.${bookingId}&select=*&order=is_lead.desc,created_at.asc`,
+    ).catch(() => null),
+    formByTrip(tripId),
+    waiverByTrip(tripId),
+  ]);
+
+  const responses = form
+    ? (await sbRequest<Array<{ traveller_id: string | null; answers: Record<string, string> }>>(
+        `gt_form_responses?booking_id=eq.${bookingId}&form_id=eq.${form.id}&select=traveller_id,answers`,
+      ).catch(() => null)) ?? []
+    : [];
+
+  const signatures = waiver
+    ? (await sbRequest<Array<{ traveller_id: string | null }>>(
+        `gt_signatures?booking_id=eq.${bookingId}&waiver_id=eq.${waiver.id}&select=traveller_id`,
+      ).catch(() => null)) ?? []
+    : [];
+
+  return {
+    booking: {
+      id: bookingId,
+      reference: String(r.reference),
+      status: String(r.status),
+      party_size: Number(r.party_size),
+      currency: String(r.currency ?? 'gbp'),
+      operator_id: (r.operator_id as string) ?? null,
+      trip_id: tripId,
+      trip_title: String(trip.title ?? 'your trip'),
+      operator_name: String(op.name ?? 'the operator'),
+      starts_on: (dep.starts_on as string) ?? null,
+      ends_on: (dep.ends_on as string) ?? null,
+    },
+    travellers: travellers ?? [],
+    form,
+    waiver,
+    responses,
+    signatures,
+  };
+}
+
+/** Persist a validated registration. Every write is scoped to this booking, and
+ *  a traveller id the browser sent is only reused if it already belongs here;
+ *  anything else becomes a fresh row rather than reaching another booking. */
+export async function writeRegistration(
+  ctx: RegistrationContext,
+  value: ValidatedRegistration,
+  meta: { ip: string | null; userAgent: string | null },
+): Promise<boolean> {
+  const bookingId = ctx.booking.id;
+  const ownedIds = new Set(ctx.travellers.map((t) => t.id));
+
+  // 1. Upsert one traveller row per slot, collecting the id of each in order.
+  const slotIds: string[] = [];
+  for (const t of value.travellers) {
+    const patch = {
+      full_name: t.full_name,
+      email: t.email,
+      phone: t.phone,
+      date_of_birth: t.date_of_birth,
+      updated_at: nowIso(),
+    };
+    if (t.id && ownedIds.has(t.id)) {
+      await sbUpdate('gt_travellers', `id=eq.${t.id}&booking_id=eq.${bookingId}`, patch);
+      slotIds.push(t.id);
+    } else {
+      const created = await sbInsert<{ id: string }>('gt_travellers', {
+        booking_id: bookingId, is_lead: false, ...patch,
+      });
+      const id = created[0]?.id;
+      if (!id) return false;
+      slotIds.push(id);
+    }
+  }
+
+  // 2. Replace this booking's answers for the trip's form (full rewrite, so a
+  //    removed answer does not linger).
+  if (ctx.form) {
+    await sbRequest(`gt_form_responses?booking_id=eq.${bookingId}&form_id=eq.${ctx.form.id}`, { method: 'DELETE' });
+    const inserts: Array<Record<string, unknown>> = [];
+    value.travellers.forEach((t, i) => {
+      if (Object.keys(t.answers).length) {
+        inserts.push({ form_id: ctx.form!.id, booking_id: bookingId, traveller_id: slotIds[i], answers: t.answers, submitted_at: nowIso() });
+      }
+    });
+    if (Object.keys(value.booking_answers).length) {
+      inserts.push({ form_id: ctx.form.id, booking_id: bookingId, traveller_id: null, answers: value.booking_answers, submitted_at: nowIso() });
+    }
+    if (inserts.length) await sbInsert('gt_form_responses', inserts);
+  }
+
+  // 3. Replace signatures on the current waiver version. body_sha256 is computed
+  //    HERE from the stored text, so a signature always pins what we actually
+  //    showed, never what the browser claimed.
+  if (ctx.waiver) {
+    const sha = await sha256Hex(ctx.waiver.body);
+    await sbRequest(`gt_signatures?booking_id=eq.${bookingId}&waiver_id=eq.${ctx.waiver.id}`, { method: 'DELETE' });
+    const sigs: Array<Record<string, unknown>> = [];
+    value.travellers.forEach((t, i) => {
+      if (t.signed_name) {
+        sigs.push({
+          waiver_id: ctx.waiver!.id, booking_id: bookingId, traveller_id: slotIds[i],
+          signed_name: t.signed_name, body_sha256: sha,
+          ip: meta.ip, user_agent: meta.userAgent,
+        });
+      }
+    });
+    if (sigs.length) await sbInsert('gt_signatures', sigs);
+  }
+
+  return true;
+}
+
+// --- operator manifest: one booking, everything about its people ------------
+
+export interface BookingDetail {
+  booking: BookingWithTravellers;
+  form: FormRow | null;
+  waiver: Waiver | null;
+  responses: Array<{ traveller_id: string | null; answers: Record<string, string> }>;
+  signatures: Array<{ traveller_id: string | null; signed_name: string; signed_at: string; version: number }>;
+  trip: { id: string; title: string } | null;
+  registrationComplete: boolean;
+}
+
+/** The full people-picture for one booking the operator owns. */
+export async function getBookingDetail(bookingId: string, operatorId: string): Promise<BookingDetail | null> {
+  const booking = await getBookingOwned(bookingId, operatorId);
+  if (!booking) return null;
+
+  // The trip via the departure, so form and waiver can be found.
+  let trip: { id: string; title: string } | null = null;
+  if (booking.departure_id) {
+    const rows = await sbRequest<Array<{ trip: { id: string; title: string } }>>(
+      `gt_departures?id=eq.${booking.departure_id}&select=trip:gt_trips(id,title)&limit=1`,
+    ).catch(() => null);
+    const t = rows?.[0]?.trip;
+    if (t) trip = { id: String(t.id), title: String(t.title) };
+  }
+
+  const form = trip ? await formByTrip(trip.id) : null;
+  const waiver = trip ? await waiverByTrip(trip.id) : null;
+
+  const responses = form
+    ? (await sbRequest<Array<{ traveller_id: string | null; answers: Record<string, string> }>>(
+        `gt_form_responses?booking_id=eq.${bookingId}&form_id=eq.${form.id}&select=traveller_id,answers`,
+      ).catch(() => null)) ?? []
+    : [];
+
+  const signatures = waiver
+    ? (await sbRequest<Array<{ traveller_id: string | null; signed_name: string; signed_at: string }>>(
+        `gt_signatures?booking_id=eq.${bookingId}&waiver_id=eq.${waiver.id}&select=traveller_id,signed_name,signed_at`,
+      ).catch(() => null)) ?? []
+    : [];
+
+  const travellerAnswers = new Map<string, Set<string>>();
+  let bookingAnswers = new Set<string>();
+  for (const r of responses) {
+    const keys = new Set(Object.keys(r.answers ?? {}));
+    if (r.traveller_id) travellerAnswers.set(r.traveller_id, keys);
+    else bookingAnswers = keys;
+  }
+  const signedTravellerIds = new Set(signatures.map((s) => s.traveller_id).filter((x): x is string => !!x));
+
+  const registrationComplete = isRegistrationComplete({
+    partySize: booking.party_size,
+    schema: form?.schema ?? [],
+    waiver: waiver ? { id: waiver.id, version: waiver.version, is_mandatory: waiver.is_mandatory } : null,
+    travellers: booking.travellers.map((t) => ({ id: t.id, full_name: t.full_name })),
+    travellerAnswers,
+    bookingAnswers,
+    signedTravellerIds,
+  });
+
+  return {
+    booking, form, waiver, responses,
+    signatures: signatures.map((s) => ({ ...s, version: waiver?.version ?? 1 })),
+    trip, registrationComplete,
   };
 }
 

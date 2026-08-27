@@ -18,9 +18,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { requireOperator } from '@/lib/auth';
 import { validateTrip, validateDeparture, isValidTripStatus } from '@/lib/validate';
 import { sanitiseTripContent } from '@/lib/content';
+import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
+import { normaliseReference } from '@/lib/booking';
 import { fail, type ActionState } from '@/lib/action-state';
 import {
   createTrip,
@@ -32,6 +35,10 @@ import {
   getTripOwned,
   listOpenDepartures,
   updateTripContent,
+  saveForm,
+  saveWaiver,
+  getRegistrationContext,
+  writeRegistration,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -160,4 +167,101 @@ export async function saveTripContentAction(_prev: ActionState, form: FormData):
   // The public trip page revalidates on its own 60s cycle, so the change shows
   // there within a minute without needing its operator+slug path here.
   return { ok: true, errors: {}, message: 'Content saved.' };
+}
+
+// ---------------------------------------------------------------------------
+//  Phase 4 authoring — the custom registration form and the waiver.
+// ---------------------------------------------------------------------------
+
+export async function saveFormAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const tripId = String(form.get('id') || '');
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(form.get('schema') || '[]'));
+  } catch {
+    return fail({}, 'The form could not be read. Please try again.');
+  }
+
+  // The sanitiser is the authority: it keeps keys stable and unique and drops
+  // anything malformed before it can reach a traveller.
+  const schema = sanitiseFormSchema(parsed);
+  const saved = await saveForm(tripId, ctx.operatorId, schema);
+  if (!saved) return fail({}, 'That trip could not be found.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  return { ok: true, errors: {}, message: schema.length ? 'Questions saved.' : 'Form cleared.' };
+}
+
+export async function saveWaiverAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const tripId = String(form.get('id') || '');
+
+  // An empty body means "no waiver", which sanitiseWaiverInput returns as null.
+  const input = sanitiseWaiverInput({
+    title: form.get('title'),
+    body: form.get('body'),
+    is_mandatory: form.get('is_mandatory') === 'on',
+  });
+
+  const saved = await saveWaiver(tripId, ctx.operatorId, input);
+  if (!saved) return fail({}, 'That trip could not be found.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  return { ok: true, errors: {}, message: input ? 'Agreement saved.' : 'Agreement removed.' };
+}
+
+// ---------------------------------------------------------------------------
+//  Phase 4 registration — traveller-facing, gated on the booking REFERENCE.
+//  This is the one console action with no operator session: whoever holds the
+//  reference may complete that booking, exactly as they can view it. Every id
+//  the payload carries is re-resolved against the booking inside the repo.
+// ---------------------------------------------------------------------------
+
+export async function submitRegistrationAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ref = normaliseReference(String(form.get('reference') || ''));
+  if (!ref) return fail({}, 'We could not find that booking.');
+
+  const ctx = await getRegistrationContext(ref);
+  if (!ctx) return fail({}, 'We could not find that booking.');
+
+  // A place that is no longer held cannot be registered against.
+  if (ctx.booking.status === 'expired' || ctx.booking.status === 'cancelled') {
+    return fail({}, 'This booking is no longer active, so it cannot be completed.');
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(String(form.get('payload') || '{}'));
+  } catch {
+    return fail({}, 'Your details could not be read. Please try again.');
+  }
+
+  const { ok, errors, value } = validateRegistration(
+    ctx.form?.schema ?? [],
+    ctx.waiver,
+    ctx.booking.party_size,
+    payload,
+  );
+  if (!ok) return fail(errors, 'Please check the highlighted details.');
+
+  // Signature provenance. NOTE: per-IP rate limiting on this public action is
+  // the documented phase-2 follow-up and still wants a shared store.
+  const h = await headers();
+  const rawIp = (h.get('x-forwarded-for') || '').split(',')[0]?.trim() || '';
+  // Only a well-formed address reaches the inet column; junk becomes null rather
+  // than failing the whole registration insert.
+  const ip = /^[0-9a-fA-F:.]{3,45}$/.test(rawIp) && /[.:]/.test(rawIp) ? rawIp : null;
+  const userAgent = h.get('user-agent');
+
+  const written = await writeRegistration(ctx, value, { ip, userAgent });
+  if (!written) return fail({}, 'Something went wrong saving your details. Please try again.');
+
+  revalidatePath(`/booked/${ctx.booking.reference}`);
+  redirect(`/booked/${ctx.booking.reference}?registered=1`);
 }
