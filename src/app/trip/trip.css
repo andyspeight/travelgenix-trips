@@ -1,110 +1,260 @@
-/* Public trip pages. Operator-branded: the accent comes from the operator's
-   own brand record at render time, these are only the neutral bones.
+/* =============================================================================
+   Public trip page — an operator's brochure, not our UI.
+   =============================================================================
 
-   The whole product is light (see globals.css for why). A trip page goes one
-   step further than the console and sits on PURE white rather than the warm
-   paper the tool uses, because it is a brochure carrying somebody else's
-   brand: a warm tint of ours would sit underneath every operator's palette and
-   quietly shift it. */
+   VARIANCE 6 · MOTION 4 · DENSITY 4 · RECIPE none
 
-:root:has(.t-page) {
-  --tg-paper: #ffffff;
+   Recipe is none deliberately: the motion catalogue is for client homepages and
+   landing pages. A trip page is a product page, where the rule is explicit.
+
+   Everything visible here is derived from ONE value, --op-accent, which arrives
+   already contrast-checked against white by lib/colour.ts. That guarantee is
+   what makes the tinted neutrals below safe: mixing a colour that passes 4.5:1
+   on white into an already-dark grey can only ever keep it dark, never lift it
+   into unreadability.
+
+   The page sits on pure white while the console uses warm paper. A tint of ours
+   underneath somebody else's palette quietly shifts it.
+   ============================================================================= */
+
+:root:has(.t-page) { --tg-paper: #ffffff; }
+
+.t-page {
+  /* Overridden inline per operator. These are the fallbacks. */
+  --op-accent: var(--tg-accent);
+  --op-font: var(--tg-font);
+
+  --op-ink:    color-mix(in oklab, var(--op-accent)  8%, #12161a);
+  --op-ink-2:  color-mix(in oklab, var(--op-accent) 10%, #3b434b);
+  --op-muted:  color-mix(in oklab, var(--op-accent) 12%, #59626a);
+  --op-rule:   color-mix(in oklab, var(--op-accent) 14%, #e3e7ea);
+  --op-wash:   color-mix(in oklab, var(--op-accent)  4%, #ffffff);
+  --op-hairline: color-mix(in oklab, var(--op-accent) 26%, #d4d9dd);
+
+  font-family: var(--op-font);
+  color: var(--op-ink);
+  background: #fff;
 }
 
-.t-page { max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; }
+/* --- the browser's own surfaces, themed from the operator palette ---------- */
 
-.t-hero {
-  display: block; width: 100%; height: auto; max-height: 420px;
-  object-fit: cover; border-radius: var(--tg-radius); margin-bottom: 30px;
+.t-page ::selection { background: color-mix(in oklab, var(--op-accent) 22%, #fff); color: var(--op-ink); }
+.t-page { caret-color: var(--op-accent); scrollbar-color: var(--op-hairline) transparent; }
+.t-page :focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.t-page a { color: var(--op-accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.t-page a:hover { text-decoration-thickness: 2px; }
+
+/* --- masthead. The operator's name, as a page header rather than a kicker --- */
+
+.t-mast {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--op-rule);
+}
+.t-mast-wrap { max-width: 1160px; margin-inline: auto; width: 100%; display: flex; align-items: center; gap: 12px; }
+.t-mast img { height: 26px; width: auto; }
+.t-mast span {
+  font-size: 14px; font-weight: 600; letter-spacing: -.005em;
+  color: var(--op-ink);
 }
 
-.t-operator {
-  font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--tg-muted); margin: 0 0 8px;
+/* --- hero. The photograph is the product, so it gets real height ----------- */
+
+.t-hero { position: relative; overflow: hidden; background: var(--op-wash); }
+.t-hero img {
+  display: block; width: 100%;
+  height: clamp(280px, 52vh, 560px);
+  object-fit: cover;
 }
-.t-title { font-size: clamp(1.9rem, 5vw, 2.7rem); line-height: 1.06; letter-spacing: -.025em; margin: 0; text-wrap: balance; }
-.t-location { color: var(--tg-ink-2); margin: 10px 0 0; }
-.t-summary { font-size: 1.12rem; line-height: 1.55; margin: 22px 0 0; }
 
-.t-page section { margin-top: 46px; }
-.t-page h2 { font-size: 1.2rem; letter-spacing: -.01em; margin: 0 0 14px; }
-.t-page h3 { font-size: 1rem; margin: 0 0 5px; }
-.t-quiet { color: var(--tg-muted); }
-.t-book { margin-top: 18px; font-size: 14px; }
+/* --- the one authored motion moment: the hero settles, the title follows ---
+   Base state IS the finished state, so with animation unavailable or reduced
+   motion set, the page renders correctly and simply does not move. */
 
-.t-bullets { margin: 0; padding-left: 20px; }
-.t-bullets li { margin-bottom: 7px; }
+@keyframes t-settle { from { transform: scale(1.055); } to { transform: none; } }
+@keyframes t-rise   { from { transform: translateY(16px); opacity: .001; } to { transform: none; opacity: 1; } }
 
-.t-departures { list-style: none; padding: 0; margin: 0; }
-.t-departures li {
-  display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: baseline;
-  justify-content: space-between;
-  padding: 16px 0; border-top: 1px solid var(--tg-rule);
+.t-hero img { animation: t-settle 1100ms cubic-bezier(.16,1,.3,1) both; }
+.t-lede > * { animation: t-rise 700ms cubic-bezier(.16,1,.3,1) both; }
+.t-lede > :nth-child(2) { animation-delay: 70ms; }
+.t-lede > :nth-child(3) { animation-delay: 140ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .t-hero img, .t-lede > * { animation: none; }
 }
-.t-departures li:last-child { border-bottom: 1px solid var(--tg-rule); }
-.t-when { font-weight: 500; }
-.t-price { font-weight: 600; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; color: var(--op-accent, var(--tg-accent)); }
-.t-deposit { font-weight: 400; font-size: 12px; color: var(--tg-muted); }
-.t-seats { color: var(--tg-muted); font-size: 13px; }
 
-.t-days { list-style: none; counter-reset: day; padding: 0; margin: 0; }
-.t-days li {
-  counter-increment: day; padding: 16px 0 16px 44px; position: relative;
-  border-top: 1px solid var(--tg-rule);
+/* --- the two-column body --------------------------------------------------
+   The rail comes FIRST in the DOM so a phone meets the price early, and is
+   placed into column two on desktop. */
+
+.t-body {
+  max-width: 1160px; margin-inline: auto; padding: 0 24px 100px;
+  display: grid; gap: 56px 64px; align-items: start;
 }
-.t-days li::before {
-  content: 'Day ' counter(day);
-  position: absolute; left: 0; top: 16px;
-  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--tg-muted); width: 40px;
+@media (min-width: 940px) {
+  .t-body { grid-template-columns: minmax(0, 1fr) 20rem; }
+  .t-main { grid-column: 1; grid-row: 1; }
+  .t-rail { grid-column: 2; grid-row: 1; position: sticky; top: 28px; }
 }
-.t-days p { margin: 0; color: var(--tg-ink-2); }
 
-.t-two-up { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 30px; }
+/* --- lede ------------------------------------------------------------------ */
 
-/* --- migrated tour content --- */
+.t-lede { padding-top: 48px; }
+.t-title {
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  line-height: 1.03; letter-spacing: -.03em; font-weight: 700;
+  margin: 0; text-wrap: balance;
+}
+.t-where {
+  margin: 14px 0 0; color: var(--op-muted);
+  font-size: 14px; letter-spacing: .02em;
+}
+.t-summary {
+  margin: 22px 0 0; font-size: clamp(1.05rem, 1.6vw, 1.2rem);
+  line-height: 1.5; color: var(--op-ink-2); max-width: 60ch;
+}
 
-.t-note { font-size: 13px; margin-top: 14px; }
+/* --- sections -------------------------------------------------------------- */
+
+.t-main section { margin-top: 60px; }
+.t-main h2 {
+  font-size: 13px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--op-muted); margin: 0 0 20px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--op-rule);
+}
+.t-main h3 { font-size: 1.05rem; letter-spacing: -.01em; margin: 0 0 6px; }
+.t-main p { margin: 0 0 14px; line-height: 1.62; max-width: 65ch; color: var(--op-ink-2); }
+.t-quiet { color: var(--op-muted); }
+
+.t-bullets { list-style: none; margin: 0; padding: 0; }
+.t-bullets li {
+  position: relative; padding-left: 22px; margin-bottom: 10px;
+  color: var(--op-ink-2); line-height: 1.5;
+}
+.t-bullets li::before {
+  content: ''; position: absolute; left: 2px; top: .62em;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--op-accent); opacity: .55;
+}
+
+/* --- the offer rail. The commercial heart of the page --------------------- */
+
+.t-rail-inner {
+  border: 1px solid var(--op-hairline);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 40px -24px var(--op-accent);
+  overflow: hidden;
+}
+.t-rail-head { padding: 22px 22px 18px; border-bottom: 1px solid var(--op-rule); }
+.t-rail-from { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--op-muted); }
+.t-rail-price {
+  display: block; margin-top: 6px;
+  font-size: 2.1rem; font-weight: 700; letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums; color: var(--op-ink); line-height: 1;
+}
+.t-rail-per { font-size: 13px; color: var(--op-muted); margin-top: 7px; }
+
+.t-dates { list-style: none; margin: 0; padding: 0; }
+.t-dates li { padding: 14px 22px; border-bottom: 1px solid var(--op-rule); }
+.t-dates li:last-child { border-bottom: 0; }
+.t-date-when { font-weight: 600; font-size: 14.5px; }
+.t-date-meta {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-top: 4px; font-size: 13px; color: var(--op-muted);
+  font-variant-numeric: tabular-nums;
+}
+.t-date-price { color: var(--op-ink-2); font-weight: 600; }
+.t-tight { color: var(--op-accent); font-weight: 600; }
+.t-gone { text-decoration: line-through; }
+
+.t-rail-foot { padding: 18px 22px 22px; background: var(--op-wash); border-top: 1px solid var(--op-rule); }
+.t-cta {
+  display: block; width: 100%; text-align: center;
+  padding: 12px 16px; border-radius: 7px;
+  background: var(--op-accent); color: #fff;
+  font: inherit; font-size: 15px; font-weight: 600; text-decoration: none;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform .12s cubic-bezier(.16,1,.3,1), filter .12s;
+}
+.t-cta:hover { filter: brightness(1.09); text-decoration: none; }
+.t-cta:active { transform: translateY(1px); }
+.t-rail-note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--op-muted); }
+
+/* --- at a glance ----------------------------------------------------------- */
 
 .t-scroll { overflow-x: auto; }
-.t-glance { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 14px; }
-.t-glance th, .t-glance td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--tg-rule); }
+.t-glance { border-collapse: collapse; width: 100%; min-width: 480px; font-size: 14px; }
+.t-glance th, .t-glance td { text-align: left; padding: 10px 16px 10px 0; border-bottom: 1px solid var(--op-rule); }
 .t-glance thead th {
-  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--tg-muted); font-weight: 500;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--op-muted); font-weight: 500;
 }
-.t-glance tbody th { font-weight: 600; white-space: nowrap; }
-.t-glance tbody td { color: var(--tg-ink-2); }
+.t-glance tbody th { font-weight: 600; white-space: nowrap; width: 1%; }
+.t-glance tbody td { color: var(--op-ink-2); }
 
+/* --- day by day, as a route rather than a list ---------------------------- */
+
+.t-days { list-style: none; margin: 0; padding: 0; }
+.t-days li {
+  position: relative; padding: 0 0 30px 30px;
+  border-left: 1px solid var(--op-rule);
+}
+.t-days li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.t-days li::before {
+  content: ''; position: absolute; left: -4.5px; top: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--op-accent); box-shadow: 0 0 0 4px #fff;
+}
 .t-day-label {
-  display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--tg-muted); margin-bottom: 3px;
+  display: block; font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--op-muted); margin-bottom: 4px;
 }
-.t-days li { padding-left: 0; }
-.t-days li::before { content: none; }
-
-.t-facts { display: flex; flex-wrap: wrap; gap: 6px 26px; margin: 12px 0 0; }
+.t-facts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 12px 0 0; }
 .t-facts div { display: flex; gap: 6px; font-size: 13px; }
-.t-facts dt { color: var(--tg-muted); margin: 0; }
-.t-facts dt::after { content: ''; }
-.t-facts dd { margin: 0; font-weight: 500; }
+.t-facts dt { color: var(--op-muted); margin: 0; }
+.t-facts dd { margin: 0; font-weight: 500; color: var(--op-ink-2); }
+.t-day-shots { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.t-day-shots img { width: 132px; height: 92px; object-fit: cover; border-radius: 6px; }
+
+/* --- priced rows: optional activities and extras -------------------------- */
 
 .t-extras { list-style: none; padding: 0; margin: 14px 0 0; }
 .t-extras li {
   display: flex; gap: 16px; justify-content: space-between; align-items: baseline;
-  padding: 9px 0; border-top: 1px solid var(--tg-rule); font-size: 14px;
+  padding: 11px 0; border-top: 1px solid var(--op-rule); font-size: 14px;
 }
-.t-extras--wide li { padding: 14px 0; font-size: 15px; }
-.t-extras small { display: block; color: var(--tg-muted); font-size: 13px; margin-top: 3px; }
+.t-extras--wide li { padding: 15px 0; font-size: 15px; }
+.t-extras small { display: block; color: var(--op-muted); font-size: 13px; margin-top: 4px; line-height: 1.45; max-width: 58ch; }
 .t-flag {
-  font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .05em;
-  text-transform: uppercase; margin-left: 8px;
-  color: var(--op-accent, var(--tg-accent));
+  font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; margin-left: 9px; color: var(--op-accent);
+  padding: 2px 6px; border-radius: 3px;
+  background: color-mix(in oklab, var(--op-accent) 12%, #fff);
 }
-.t-extra-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.t-extra-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; color: var(--op-ink); }
 
-.t-feature { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 26px; align-items: start; }
-.t-feature img { width: 100%; height: auto; border-radius: var(--tg-radius); }
+/* --- two-up, feature, gallery ---------------------------------------------- */
 
-.t-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-.t-gallery img { width: 100%; height: 140px; object-fit: cover; border-radius: var(--tg-radius); }
+.t-two-up { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 28px 40px; }
+
+.t-feature { display: grid; gap: 24px; align-items: start; }
+@media (min-width: 620px) { .t-feature { grid-template-columns: 5fr 7fr; } }
+.t-feature img { width: 100%; height: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; }
+
+/* Deliberately uneven: equal squares are the image version of the
+   three-equal-cards tell, and a gallery of a real trip is not uniform. */
+.t-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.t-gallery img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block; }
+.t-gallery li { list-style: none; min-height: 110px; }
+.t-gallery li:nth-child(4n+1) { grid-column: span 2; grid-row: span 2; }
+@media (max-width: 620px) {
+  .t-gallery { grid-template-columns: repeat(2, 1fr); }
+  .t-gallery li:nth-child(4n+1) { grid-column: span 2; grid-row: auto; }
+}
+
+.t-foot { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--op-rule); font-size: 13px; color: var(--op-muted); }
