@@ -136,3 +136,73 @@ export interface Package {
   info_url: string | null;
   sort_order: number;
 }
+
+// ---------------------------------------------------------------------------
+//  Phase 4 — the people. Travellers, custom registration forms, and waivers.
+// ---------------------------------------------------------------------------
+
+export interface Traveller {
+  id: string;
+  booking_id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  date_of_birth: string | null;
+  is_lead: boolean;
+  package_id: string | null;
+}
+
+/** The question types an operator can put on a registration form. Deliberately
+ *  a small, practical set: every one maps to a native input and a clean way to
+ *  validate it. */
+export type RegFieldType =
+  | 'short_text' | 'long_text' | 'email' | 'phone'
+  | 'date' | 'number' | 'select' | 'checkbox';
+
+/** Whether a question is asked once for the whole booking (an emergency contact)
+ *  or once per traveller (a dietary requirement). */
+export type RegScope = 'traveller' | 'booking';
+
+export interface RegField {
+  /** Stable across edits: answers are stored under this key, so it must not
+   *  change when a label is reworded. Minted when the field is added. */
+  key: string;
+  label: string;
+  type: RegFieldType;
+  scope: RegScope;
+  required: boolean;
+  help?: string;
+  /** For 'select' only. */
+  options?: string[];
+}
+
+/** One custom form per trip. `schema` is the ordered list of questions. */
+export interface FormRow {
+  id: string;
+  trip_id: string;
+  name: string;
+  schema: RegField[];
+}
+
+/** A waiver an operator writes, versioned. A signature points at the exact text
+ *  it signed through the version and a hash, so a later edit never rewrites what
+ *  someone already agreed to. */
+export interface Waiver {
+  id: string;
+  operator_id: string;
+  trip_id: string | null;
+  title: string;
+  body: string;
+  version: number;
+  is_mandatory: boolean;
+}
+
+export interface Signature {
+  id: string;
+  waiver_id: string;
+  booking_id: string;
+  traveller_id: string | null;
+  signed_name: string;
+  signed_at: string;
+  body_sha256: string;
+}
