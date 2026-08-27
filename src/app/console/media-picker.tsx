@@ -84,7 +84,13 @@ function MediaPicker({ accept, onSelect, onClose }: { accept: Accept; onSelect: 
         prepend(item);
       }
     } catch (e) {
-      setUploadError(e instanceof Error ? e.message : 'Upload failed. Please try again.');
+      const raw = e instanceof Error ? e.message : '';
+      // @vercel/blob throws its own "Failed to retrieve the client token" before
+      // our friendly 503 body is seen, so translate it here.
+      const friendly = /client token|store|blob/i.test(raw)
+        ? 'Uploads are not switched on yet. A Vercel Blob store needs connecting to this project, then a redeploy.'
+        : (raw || 'Upload failed. Please try again.');
+      setUploadError(friendly);
     } finally {
       setBusy(false);
     }

@@ -75,6 +75,7 @@ export async function GET() {
     TG_WIDGETS_ORIGIN: state('TG_WIDGETS_ORIGIN'),
     STRIPE_SECRET_KEY: state('STRIPE_SECRET_KEY'),
     STRIPE_CONNECT_WEBHOOK_SECRET: state('STRIPE_CONNECT_WEBHOOK_SECRET'),
+    BLOB_READ_WRITE_TOKEN: state('BLOB_READ_WRITE_TOKEN'),
   };
 
   const database = await probeDatabase();
