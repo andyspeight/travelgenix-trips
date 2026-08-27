@@ -17,7 +17,7 @@
 import { redirect } from 'next/navigation';
 import { validateBooking } from '@/lib/booking';
 import { validateWaitlist } from '@/lib/validate';
-import { takeHold, getConfirmation, joinWaitlist, getBookingOperatorContact } from '@/lib/repo';
+import { takeHold, getConfirmation, joinWaitlist, getBookingOperatorContact, checkPromoCode } from '@/lib/repo';
 import { holdMessage } from '@/lib/hold';
 import { fail, type ActionState } from '@/lib/action-state';
 import { sendTravellerConfirmation, sendOperatorNotice } from '@/lib/notify';
@@ -58,6 +58,7 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
     lead_phone: lead.phone,
     travellers: value.travellers,
     package_id: value.package_id,
+    promo_code: value.promo_code,
   });
 
   if (!outcome.ok) {
@@ -108,6 +109,12 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
 //  Waitlist — public, when a trip is full. Never redirects: it stays on the
 //  page and confirms in place.
 // ---------------------------------------------------------------------------
+
+/** Public: does a code apply to this trip? For the book form's live check. The
+ *  hold re-validates, so this only ever previews. */
+export async function checkPromoAction(tripId: string, code: string): Promise<{ valid: boolean; describe?: string }> {
+  return checkPromoCode(String(tripId), String(code));
+}
 
 export async function joinWaitlistAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const raw: Record<string, unknown> = {};

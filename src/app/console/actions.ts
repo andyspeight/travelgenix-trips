@@ -20,7 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireOperator } from '@/lib/auth';
-import { validateTrip, validateDeparture, validatePackage, isValidTripStatus } from '@/lib/validate';
+import { validateTrip, validateDeparture, validatePackage, validatePromo, isValidTripStatus } from '@/lib/validate';
 import { sanitiseTripContent } from '@/lib/content';
 import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
 import { normaliseReference } from '@/lib/booking';
@@ -48,6 +48,8 @@ import {
   parseSegment,
   saveMessageTemplate,
   deleteMessageTemplate,
+  savePromoCode,
+  removePromoCode,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -266,6 +268,34 @@ export async function deleteTemplateAction(form: FormData): Promise<void> {
 
   await deleteMessageTemplate(String(form.get('id') || ''), ctx.operatorId);
   revalidatePath(`/console/trips/${String(form.get('trip_id') || '')}/manage`);
+}
+
+// ---------------------------------------------------------------------------
+//  Promo codes.
+// ---------------------------------------------------------------------------
+
+export async function savePromoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const raw = fields(form);
+  const tripId = String(raw.id || '');
+  const { ok, errors, value } = validatePromo(raw);
+  if (!ok) return fail(errors, 'Check the highlighted fields.');
+
+  const res = await savePromoCode(tripId, ctx.operatorId, value);
+  if (!res.ok) return fail({}, res.error || 'The code could not be saved.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  return { ok: true, errors: {}, message: 'Code saved.' };
+}
+
+export async function removePromoAction(form: FormData): Promise<void> {
+  const ctx = await requireOperator();
+  if (!ctx) return;
+
+  await removePromoCode(String(form.get('id') || ''), ctx.operatorId);
+  revalidatePath(`/console/trips/${String(form.get('trip_id') || '')}`);
 }
 
 // ---------------------------------------------------------------------------

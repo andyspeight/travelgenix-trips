@@ -5,7 +5,7 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveTripAction, saveDepartureAction, savePackageAction } from './actions';
+import { saveTripAction, saveDepartureAction, savePackageAction, savePromoAction } from './actions';
 import { EMPTY_STATE, type ActionState } from '@/lib/action-state';
 import type { Trip, Departure, Package } from '@/lib/types';
 import { MediaField } from './media-picker';
@@ -225,6 +225,61 @@ export function PackageForm({ tripId, pkg }: { tripId: string; pkg?: Package }) 
 
       <div className="c-actions">
         <Submit label={pkg ? 'Save package' : 'Add package'} busy="Saving..." />
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export function PromoForm({ tripId }: { tripId: string }) {
+  const [state, action] = useActionState(savePromoAction, EMPTY_STATE);
+  const [kind, setKind] = useState<'percent' | 'amount'>('percent');
+  const e = state.errors;
+
+  return (
+    <form action={action} noValidate>
+      <Notice state={state} />
+      <input type="hidden" name="id" value={tripId} />
+
+      <div className="c-row">
+        <Field name="code" label="Code" hint="Letters and numbers." error={e.code}>
+          <input id="code" name="code" placeholder="EARLYBIRD" style={{ textTransform: 'uppercase' }} />
+        </Field>
+        <Field name="kind" label="Type" error={e.kind}>
+          <select id="kind" name="kind" value={kind} onChange={(ev) => setKind(ev.target.value as 'percent' | 'amount')}>
+            <option value="percent">Percent off</option>
+            <option value="amount">Amount off</option>
+          </select>
+        </Field>
+        <Field name="value" label={kind === 'percent' ? 'Percent' : 'Amount off'} error={e.value}>
+          <input id="value" name="value" inputMode="decimal" placeholder={kind === 'percent' ? '10' : '50'} />
+        </Field>
+      </div>
+
+      {kind === 'amount' && (
+        <Field name="per" label="Apply the amount" error={e.per}>
+          <select id="per" name="per" defaultValue="booking">
+            <option value="booking">Once per booking</option>
+            <option value="person">Per person</option>
+          </select>
+        </Field>
+      )}
+
+      <div className="c-row">
+        <Field name="starts_on" label="Valid from" hint="Optional." error={e.starts_on}>
+          <input id="starts_on" name="starts_on" type="date" />
+        </Field>
+        <Field name="ends_on" label="Valid until" hint="Optional." error={e.ends_on}>
+          <input id="ends_on" name="ends_on" type="date" />
+        </Field>
+        <Field name="max_redemptions" label="Max uses" hint="Blank for no limit." error={e.max_redemptions}>
+          <input id="max_redemptions" name="max_redemptions" type="number" min={1} />
+        </Field>
+      </div>
+
+      <div className="c-actions">
+        <Submit label="Add code" busy="Saving..." />
       </div>
     </form>
   );

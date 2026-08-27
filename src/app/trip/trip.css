@@ -405,3 +405,12 @@ a.bk-cta { display: block; text-align: center; text-decoration: none; }
 .t-package-occ { margin: 0; font-size: 13px; color: var(--op-muted, #59626a); }
 .t-package-desc { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--op-ink-2, #3b434b); }
 .t-package-link { align-self: flex-start; margin-top: 6px; font-size: 14px; font-weight: 500; }
+
+/* promo code field on the book form */
+.bk-promo-row { display: flex; gap: 8px; margin-top: 6px; }
+.bk-promo-row input { flex: 1 1; }
+.bk-promo-apply { font: inherit; font-size: 14px; font-weight: 600; padding: 0 16px; border-radius: 8px;
+  border: 1px solid var(--op-hairline, #d4d9dd); background: #fff; color: var(--op-ink, #12211f); cursor: pointer; white-space: nowrap; }
+.bk-promo-apply:hover { background: var(--op-wash, #fafafa); }
+.bk-promo-apply:disabled { opacity: .55; cursor: default; }
+.bk-promo-ok { color: var(--op-accent); font-size: 13.5px; font-weight: 500; margin: 6px 0 0; }

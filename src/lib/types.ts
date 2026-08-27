@@ -207,6 +207,24 @@ export interface Signature {
   body_sha256: string;
 }
 
+export type PromoKind = 'percent' | 'amount';
+export type PromoPer = 'booking' | 'person';
+
+export interface PromoCode {
+  id: string;
+  operator_id: string;
+  trip_id: string | null;
+  code: string;
+  kind: PromoKind;
+  value: number;
+  per: PromoPer;
+  starts_on: string | null;
+  ends_on: string | null;
+  max_redemptions: number | null;
+  redeemed: number;
+  is_active: boolean;
+}
+
 export interface MessageTemplate {
   id: string;
   operator_id: string;

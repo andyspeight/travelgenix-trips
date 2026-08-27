@@ -4,13 +4,13 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, listPromoCodes, describePromo } from '@/lib/repo';
 import { format as money } from '@/lib/money';
-import { TripForm, DepartureForm, PackageForm } from '../../forms';
+import { TripForm, DepartureForm, PackageForm, PromoForm } from '../../forms';
 import { ContentEditor } from '../../content-editor';
 import { RegistrationEditor } from '../../registration-editor';
 import { SignInPrompt, NoOperator } from '../../states';
-import { setTripStatusAction, removeDepartureAction, removePackageAction } from '../../actions';
+import { setTripStatusAction, removeDepartureAction, removePackageAction, removePromoAction } from '../../actions';
 import type { Departure, Package } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -33,10 +33,11 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   const openCount = departures.filter((d) => d.status === 'open').length;
   const publicUrl = `/trip/${operator.slug}/${trip.slug}`;
 
-  const [regForm, waiver, packages] = await Promise.all([
+  const [regForm, waiver, packages, promos] = await Promise.all([
     getFormForTrip(trip.id, operator.id),
     getWaiverForTrip(trip.id, operator.id),
     getPackagesForTrip(trip.id, operator.id),
+    listPromoCodes(trip.id, operator.id),
   ]);
 
   return (
@@ -137,6 +138,39 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
 
       <h2 style={{ fontSize: '1rem' }}>Add a package</h2>
       <PackageForm tripId={trip.id} />
+
+      <h2>Promo codes</h2>
+      <p className="c-sub" style={{ marginTop: '-6px' }}>
+        Discount and early-bird codes a traveller types at checkout. Percent or amount off,
+        optionally date-limited or capped.
+      </p>
+      {promos.length === 0 ? (
+        <p className="c-empty">No codes yet.</p>
+      ) : (
+        <ul className="c-list">
+          {promos.map((p) => (
+            <li key={p.id}>
+              <span className="c-name c-mono">{p.code}</span>
+              <span className="c-meta">
+                {describePromo(p, trip.currency)}
+                {!p.is_active && ' · inactive'}
+                {(p.starts_on || p.ends_on) && ` · ${p.starts_on ?? '…'} to ${p.ends_on ?? '…'}`}
+                {` · used ${p.redeemed}${p.max_redemptions ? ` of ${p.max_redemptions}` : ''}`}
+              </span>
+              <span className="c-right">
+                <form action={removePromoAction}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <input type="hidden" name="trip_id" value={trip.id} />
+                  <button className="c-btn c-btn--quiet" type="submit">Remove</button>
+                </form>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 style={{ fontSize: '1rem' }}>Add a code</h2>
+      <PromoForm tripId={trip.id} />
     </>
   );
 }

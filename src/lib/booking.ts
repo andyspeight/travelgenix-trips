@@ -108,6 +108,9 @@ export interface BookingInput {
   /** The chosen package (room type), or null. The database function verifies it
    *  belongs to the trip and prices off it; here we only shape it. */
   package_id: string | null;
+  /** A promo code the traveller entered, or null. Only shaped here; the database
+   *  function is the authority on whether it applies. */
+  promo_code: string | null;
 }
 
 /** A pragmatic email check: exactly one @, something either side, a dot in the
@@ -146,6 +149,11 @@ export function validateBooking(raw: Record<string, unknown>): {
   // function is the authority on whether it belongs to the trip.
   const packageRaw = text(raw.package_id);
   const package_id = isUuid(packageRaw) ? packageRaw : null;
+
+  // A promo code is optional. Uppercased and clamped; the database function
+  // decides whether it is real, in date and unspent.
+  const promoRaw = text(raw.promo_code).toUpperCase().slice(0, 40);
+  const promo_code = promoRaw || null;
 
   const partyRaw = text(raw.party_size) || '1';
   const party_size = Number.parseInt(partyRaw, 10);
@@ -202,6 +210,7 @@ export function validateBooking(raw: Record<string, unknown>): {
       party_size: Number.isFinite(party_size) && party_size >= 1 ? party_size : 1,
       travellers,
       package_id,
+      promo_code,
     },
   };
 }

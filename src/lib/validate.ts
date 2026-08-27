@@ -288,6 +288,72 @@ export function validateWaitlist(raw: Record<string, unknown>): Validated<Waitli
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Promo codes (operator authoring)
+// ---------------------------------------------------------------------------
+
+export interface PromoInput {
+  code: string;
+  kind: 'percent' | 'amount';
+  value: number;
+  per: 'booking' | 'person';
+  starts_on: string | null;
+  ends_on: string | null;
+  max_redemptions: number | null;
+  is_active: boolean;
+}
+
+export function validatePromo(raw: Record<string, unknown>): Validated<PromoInput> {
+  const errors: FieldErrors = {};
+
+  // Codes are typed by a traveller, so keep them boring: letters and numbers,
+  // uppercased, no spaces.
+  const code = text(raw.code).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
+  if (!code) errors.code = 'Give the code some letters or numbers.';
+  else if (code.length < 3) errors.code = 'A code is at least three characters.';
+
+  const kind = text(raw.kind) === 'amount' ? 'amount' : 'percent';
+  const per = text(raw.per) === 'person' ? 'person' : 'booking';
+
+  let value = 0;
+  if (kind === 'percent') {
+    value = Number.parseInt(text(raw.value) || '0', 10);
+    if (!Number.isFinite(value) || value < 1 || value > 100) errors.value = 'A percentage is between 1 and 100.';
+  } else {
+    // An amount is entered in pounds and stored in pence.
+    const pence = toPence(text(raw.value));
+    value = pence ?? 0;
+    if (!value || value <= 0) errors.value = 'Give an amount off.';
+    else if (value > 50_000_000) errors.value = 'That amount looks too high.';
+  }
+
+  const starts_on = text(raw.starts_on);
+  if (starts_on && !isRealDate(starts_on)) errors.starts_on = 'That start date is not real.';
+  const ends_on = text(raw.ends_on);
+  if (ends_on && !isRealDate(ends_on)) errors.ends_on = 'That end date is not real.';
+  if (starts_on && ends_on && !errors.starts_on && !errors.ends_on && ends_on < starts_on) {
+    errors.ends_on = 'The end date is before the start date.';
+  }
+
+  const maxRaw = text(raw.max_redemptions);
+  const max_redemptions = maxRaw ? Number.parseInt(maxRaw, 10) : null;
+  if (max_redemptions !== null && (!Number.isFinite(max_redemptions) || max_redemptions < 1)) {
+    errors.max_redemptions = 'A limit is one or more, or blank for no limit.';
+  }
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      code, kind, value, per,
+      starts_on: starts_on || null,
+      ends_on: ends_on || null,
+      max_redemptions: max_redemptions !== null && max_redemptions >= 1 ? max_redemptions : null,
+      is_active: text(raw.is_active) !== 'off',
+    },
+  };
+}
+
 export function validatePackage(raw: Record<string, unknown>): Validated<PackageInput> {
   const errors: FieldErrors = {};
 

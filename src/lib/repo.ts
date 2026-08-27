@@ -16,14 +16,15 @@
 // =============================================================================
 
 import 'server-only';
-import { sbRequest, sbInsert, sbUpdate } from './supabase.ts';
+import { sbRequest, sbInsert, sbUpdate, SupabaseError } from './supabase.ts';
 import { slugify } from './validate.ts';
-import type { TripInput, DepartureInput, PackageInput, WaitlistInput } from './validate.ts';
+import { format as fmtMoney } from './money.ts';
+import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput } from './validate.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -492,13 +493,14 @@ export interface Confirmation {
   starts_on: string | null;
   ends_on: string | null;
   package_name: string | null;
+  promo_code: string | null;
 }
 
 export async function getConfirmation(reference: string): Promise<Confirmation | null> {
   const rows = await sbRequest<Array<Record<string, unknown>>>(
     `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
       `&select=reference,status,party_size,total_pence,deposit_pence,currency,hold_expires_at,` +
-      `traveller_name,traveller_email,package:gt_packages(name),` +
+      `traveller_name,traveller_email,package:gt_packages(name),promo:gt_promo_codes(code),` +
       `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
   ).catch(() => null);
 
@@ -509,6 +511,7 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
   const trip = (dep.trip ?? {}) as Record<string, unknown>;
   const op = (trip.operator ?? {}) as Record<string, unknown>;
   const pkg = (r.package ?? null) as Record<string, unknown> | null;
+  const promo = (r.promo ?? null) as Record<string, unknown> | null;
 
   return {
     reference: String(r.reference),
@@ -525,6 +528,7 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
     starts_on: (dep.starts_on as string) ?? null,
     ends_on: (dep.ends_on as string) ?? null,
     package_name: pkg?.name ? String(pkg.name) : null,
+    promo_code: promo?.code ? String(promo.code) : null,
   };
 }
 
@@ -946,6 +950,84 @@ export async function getTripManage(tripId: string, operatorId: string): Promise
     counts: { bookings: liveBookings, participants, heads },
     bookings,
   };
+}
+
+// ---------------------------------------------------------------------------
+//  Promo codes. Operator authoring, and a public validity check for the book
+//  form. Applying the discount is the hold RPC's job (gt_012), which re-checks
+//  everything here, so this is a preview, never the authority.
+// ---------------------------------------------------------------------------
+
+/** A human line for a code, e.g. "10% off" or "£20 off per person". */
+export function describePromo(p: { kind: string; value: number; per: string }, currency = 'gbp'): string {
+  if (p.kind === 'percent') return `${p.value}% off`;
+  const amt = fmtMoney(p.value, currency) ?? `${(p.value / 100).toFixed(0)}`;
+  return `${amt} off${p.per === 'person' ? ' per person' : ''}`;
+}
+
+/** Is a code valid for this trip right now? Mirrors the RPC's checks so the form
+ *  preview and the actual application agree. */
+export async function checkPromoCode(tripId: string, code: string): Promise<{ valid: boolean; describe?: string }> {
+  const clean = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!isUuid(tripId) || !clean) return { valid: false };
+
+  const trip = await sbRequest<Array<{ operator_id: string }>>(
+    `gt_trips?id=eq.${tripId}&status=eq.published&select=operator_id&limit=1`,
+  ).catch(() => null);
+  const operatorId = trip?.[0]?.operator_id;
+  if (!operatorId) return { valid: false };
+
+  const rows = await sbRequest<PromoCode[]>(
+    `gt_promo_codes?operator_id=eq.${operatorId}&code=eq.${encodeURIComponent(clean)}&select=*&limit=1`,
+  ).catch(() => null);
+  const p = rows?.[0];
+  const today = new Date().toISOString().slice(0, 10);
+  if (!p || !p.is_active) return { valid: false };
+  if (p.trip_id && p.trip_id !== tripId) return { valid: false };
+  if (p.starts_on && p.starts_on > today) return { valid: false };
+  if (p.ends_on && p.ends_on < today) return { valid: false };
+  if (p.max_redemptions != null && p.redeemed >= p.max_redemptions) return { valid: false };
+  return { valid: true, describe: describePromo(p) };
+}
+
+export async function listPromoCodes(tripId: string, operatorId: string): Promise<PromoCode[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return (
+    (await sbRequest<PromoCode[]>(
+      `gt_promo_codes?operator_id=eq.${operatorId}&trip_id=eq.${tripId}&select=*&order=created_at.desc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+export async function savePromoCode(
+  tripId: string, operatorId: string, input: PromoInput,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!(await getTripOwned(tripId, operatorId))) return { ok: false, error: 'That trip could not be found.' };
+  try {
+    await sbInsert('gt_promo_codes', { operator_id: operatorId, trip_id: tripId, ...input });
+    return { ok: true };
+  } catch (err) {
+    // The unique (operator, code) index rejects a duplicate.
+    const dup = err instanceof SupabaseError && err.statusCode === 409;
+    return { ok: false, error: dup ? 'You already have a code with that name.' : 'The code could not be saved.' };
+  }
+}
+
+/** Remove a code. One that has been redeemed is deactivated rather than deleted,
+ *  so a booking that used it keeps its record; an unused one is deleted. */
+export async function removePromoCode(id: string, operatorId: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  const rows = await sbRequest<PromoCode[]>(
+    `gt_promo_codes?id=eq.${id}&operator_id=eq.${operatorId}&select=redeemed&limit=1`,
+  ).catch(() => null);
+  const p = rows?.[0];
+  if (!p) return false;
+  if (p.redeemed > 0) {
+    await sbUpdate('gt_promo_codes', `id=eq.${id}&operator_id=eq.${operatorId}`, { is_active: false, updated_at: nowIso() });
+  } else {
+    await sbRequest(`gt_promo_codes?id=eq.${id}&operator_id=eq.${operatorId}`, { method: 'DELETE' });
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------

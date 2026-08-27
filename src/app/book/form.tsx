@@ -5,9 +5,9 @@
 // error. Controlled state survives the action round-trip, so a rejected
 // submission keeps the party's details and the chosen date.
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { createBookingAction } from './actions';
+import { createBookingAction, checkPromoAction } from './actions';
 import { EMPTY_STATE } from '@/lib/action-state';
 import { MAX_PARTY } from '@/lib/booking';
 import type { Departure, Package } from '@/lib/types';
@@ -29,11 +29,14 @@ function Submit() {
 }
 
 export function BookingForm({
-  departures, packages = [], currency, initialDeparture,
+  tripId, departures, packages = [], currency, initialDeparture,
 }: {
-  departures: Departure[]; packages?: Package[]; currency: string; initialDeparture?: string;
+  tripId: string; departures: Departure[]; packages?: Package[]; currency: string; initialDeparture?: string;
 }) {
   const [state, action] = useActionState(createBookingAction, EMPTY_STATE);
+  const [promo, setPromo] = useState('');
+  const [promoResult, setPromoResult] = useState<{ valid: boolean; describe?: string } | null>(null);
+  const [checking, startCheck] = useTransition();
 
   // A stale ?departure that is not among the bookable dates falls back to the
   // first one, so the form is never submitted with nothing selected.
@@ -111,6 +114,23 @@ export function BookingForm({
           </div>
         </fieldset>
       )}
+
+      <div className="bk-field bk-promo">
+        <span>Promo code <em>(optional)</em></span>
+        <div className="bk-promo-row">
+          <input name="promo_code" autoComplete="off" autoCapitalize="characters" value={promo}
+            onChange={(ev) => { setPromo(ev.target.value.toUpperCase()); setPromoResult(null); }} placeholder="e.g. EARLYBIRD" />
+          <button type="button" className="bk-promo-apply" disabled={!promo.trim() || checking}
+            onClick={() => startCheck(async () => setPromoResult(await checkPromoAction(tripId, promo)))}>
+            {checking ? 'Checking...' : 'Apply'}
+          </button>
+        </div>
+        {promoResult && (
+          promoResult.valid
+            ? <p className="bk-promo-ok">✓ {promoResult.describe} will be applied.</p>
+            : <p className="bk-err">That code is not valid for this trip.</p>
+        )}
+      </div>
 
       <div className="bk-section">
         <h2>Lead traveller</h2>

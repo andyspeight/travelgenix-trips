@@ -67,7 +67,7 @@ export default async function BookPage({
           {bookable.length === 0 ? (
             <WaitlistForm tripId={trip.id} operatorName={operator.name} />
           ) : (
-            <BookingForm departures={bookable} packages={packages} currency={trip.currency} initialDeparture={departure} />
+            <BookingForm tripId={trip.id} departures={bookable} packages={packages} currency={trip.currency} initialDeparture={departure} />
           )}
         </div>
       </div>
