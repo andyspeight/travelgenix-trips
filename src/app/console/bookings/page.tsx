@@ -59,6 +59,7 @@ export default async function BookingsPage() {
                 <th scope="col">Reference</th>
                 <th scope="col">Lead traveller</th>
                 <th scope="col">Party</th>
+                <th scope="col">Details</th>
                 <th scope="col">Status</th>
                 <th scope="col" className="c-num">Total</th>
                 <th scope="col" className="c-num">Outstanding</th>
@@ -79,15 +80,20 @@ function BookingRowView({ b }: { b: BookingRow }) {
   const total = money(b.total_pence, b.currency);
   const outstanding = money(b.balance_pence, b.currency);
   const faded = b.status === 'cancelled' || b.status === 'expired';
+  const named = b.travellers_named ?? 0;
+  const allNamed = named >= b.party_size;
 
   return (
     <tr style={faded ? { opacity: 0.55 } : undefined}>
-      <td className="c-mono">{b.reference ?? '—'}</td>
+      <td className="c-mono">
+        <a href={`/console/bookings/${b.id}`}>{b.reference ?? '—'}</a>
+      </td>
       <td>
         {b.traveller_name ?? '—'}
         {b.traveller_email && <span className="c-sub-inline">{b.traveller_email}</span>}
       </td>
       <td className="c-num">{b.party_size}</td>
+      <td className={allNamed ? undefined : 'c-faint'}>{named} of {b.party_size}</td>
       <td><span className={`c-pill c-pill--bk-${b.status}`}>{LABEL[b.status] ?? b.status}</span></td>
       <td className="c-num c-money">{total ?? '—'}</td>
       <td className="c-num c-money">{outstanding ?? (b.status === 'paid' ? '—' : total ? '—' : '')}</td>

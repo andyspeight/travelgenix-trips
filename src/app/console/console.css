@@ -210,3 +210,29 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 .mp-importing { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255,255,255,.75); font-size: 12px; font-weight: 600; color: var(--tg-ink); border-radius: 6px; }
 .mp-item:disabled { cursor: progress; }
 .mp-credit-note { font-size: 12px; color: var(--tg-muted); margin: 12px 0 0; }
+
+/* ---------------------------------------------------------------------------
+   Booking detail — the people-picture (phase 4).
+   --------------------------------------------------------------------------- */
+
+.c-facts { display: grid; gap: 0; margin: 0 0 24px; border: 1px solid var(--tg-rule); border-radius: var(--tg-radius); background: var(--tg-surface); padding: 2px 16px; }
+.c-facts > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--tg-rule); }
+.c-facts > div:last-child { border-bottom: 0; }
+.c-facts dt { color: var(--tg-muted); margin: 0; font-size: 14px; }
+.c-facts dd { margin: 0; font-weight: 500; text-align: right; }
+
+.c-people { list-style: none; padding: 0; margin: 0 0 28px; display: grid; gap: 12px; }
+.c-person { border: 1px solid var(--tg-rule); border-radius: var(--tg-radius); background: var(--tg-surface); padding: 16px 18px; }
+.c-person-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.c-person-head .c-name { font-weight: 600; font-size: 15px; }
+.c-person-facts { display: grid; gap: 0; margin: 0; }
+.c-person-facts > div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-top: 1px solid var(--tg-rule); }
+.c-person-facts dt { color: var(--tg-muted); margin: 0; font-size: 13.5px; }
+.c-person-facts dd { margin: 0; text-align: right; font-size: 14px; }
+
+.c-tag { display: inline-block; margin-left: 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--tg-accent); vertical-align: middle; }
+.c-faint { color: var(--tg-muted); font-weight: 400; font-style: normal; }
+
+.c-sig { font-size: 12.5px; font-weight: 600; }
+.c-sig--yes { color: var(--tg-accent); }
+.c-sig--no { color: var(--tg-danger); }

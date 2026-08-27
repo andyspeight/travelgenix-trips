@@ -302,20 +302,29 @@ export interface BookingRow {
   created_at: string;
   traveller_name: string | null;
   traveller_email: string | null;
+  /** How many traveller rows carry a name, for a cheap "3 of 4 added" signal on
+   *  the list. Full registration completeness is computed on the detail page. */
+  travellers_named?: number;
 }
 
 export interface BookingWithTravellers extends BookingRow {
-  travellers: Array<{ id: string; full_name: string | null; email: string | null; phone: string | null; is_lead: boolean }>;
+  travellers: Array<{ id: string; full_name: string | null; email: string | null; phone: string | null; date_of_birth: string | null; is_lead: boolean }>;
 }
 
 /** The operator's bookings, newest first, scoped to them. Never another
  *  operator's, because the filter is on operator_id and the id is theirs. */
 export async function listBookings(operatorId: string, limit = 100): Promise<BookingRow[]> {
-  return (
-    (await sbRequest<BookingRow[]>(
-      `gt_bookings?operator_id=eq.${operatorId}&select=*&order=created_at.desc&limit=${limit}`,
-    )) ?? []
-  );
+  // One query: embed just the traveller names (not the rest of the PII) so the
+  // list can show "3 of 4 added" without a query per row.
+  const rows = (await sbRequest<Array<BookingRow & { travellers?: Array<{ full_name: string | null }> }>>(
+    `gt_bookings?operator_id=eq.${operatorId}` +
+      `&select=*,travellers:gt_travellers(full_name)` +
+      `&order=created_at.desc&limit=${limit}`,
+  )) ?? [];
+  return rows.map(({ travellers, ...r }) => ({
+    ...r,
+    travellers_named: (travellers ?? []).filter((t) => (t.full_name ?? '').trim()).length,
+  }));
 }
 
 /** The manifest for one departure: who is coming, party sizes, status. Gated
@@ -338,7 +347,7 @@ export async function getDepartureManifest(
   const rows =
     (await sbRequest<BookingWithTravellers[]>(
       `gt_bookings?departure_id=eq.${departureId}&operator_id=eq.${operatorId}` +
-        `&select=*,travellers:gt_travellers(id,full_name,email,phone,is_lead)` +
+        `&select=*,travellers:gt_travellers(id,full_name,email,phone,date_of_birth,is_lead)` +
         `&order=created_at.asc`,
     ).catch(() => null)) ?? [];
 
@@ -354,7 +363,7 @@ export async function getBookingOwned(
   if (!isUuid(bookingId)) return null;
   const rows = await sbRequest<BookingWithTravellers[]>(
     `gt_bookings?id=eq.${bookingId}&operator_id=eq.${operatorId}` +
-      `&select=*,travellers:gt_travellers(id,full_name,email,phone,is_lead)&limit=1`,
+      `&select=*,travellers:gt_travellers(id,full_name,email,phone,date_of_birth,is_lead)&limit=1`,
   ).catch(() => null);
   return rows?.[0] ?? null;
 }
