@@ -1,5 +1,15 @@
 /* Public trip pages. Operator-branded: the accent comes from the operator's
-   own brand record at render time, these are only the neutral bones. */
+   own brand record at render time, these are only the neutral bones.
+
+   The whole product is light (see globals.css for why). A trip page goes one
+   step further than the console and sits on PURE white rather than the warm
+   paper the tool uses, because it is a brochure carrying somebody else's
+   brand: a warm tint of ours would sit underneath every operator's palette and
+   quietly shift it. */
+
+:root:has(.t-page) {
+  --tg-paper: #ffffff;
+}
 
 .t-page { max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; }
 
@@ -33,7 +43,7 @@
 }
 .t-departures li:last-child { border-bottom: 1px solid var(--tg-rule); }
 .t-when { font-weight: 500; }
-.t-price { font-weight: 600; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
+.t-price { font-weight: 600; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; color: var(--op-accent, var(--tg-accent)); }
 .t-deposit { font-weight: 400; font-size: 12px; color: var(--tg-muted); }
 .t-seats { color: var(--tg-muted); font-size: 13px; }
 
@@ -89,6 +99,7 @@
 .t-flag {
   font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .05em;
   text-transform: uppercase; margin-left: 8px;
+  color: var(--op-accent, var(--tg-accent));
 }
 .t-extra-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 

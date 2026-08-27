@@ -15,11 +15,16 @@ import { getPublishedTrip, listOpenDepartures } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
 import { format as money } from '@/lib/money';
 import { tripsDbConfigured } from '@/lib/supabase';
+import { readableOn } from '@/lib/colour';
 import type { Departure, TripContent, TripSection } from '@/lib/types';
 
 // Matches the 60s CDN cache the widget availability endpoint already uses, so
 // the origin is hit about once a minute per trip however busy the page gets.
 export const revalidate = 60;
+
+// Public trip pages are deliberately light-only, so this is the ground every
+// operator colour is checked against. See the note at the top of trip.css.
+const PAGE_BACKGROUND = '#ffffff';
 
 interface Params { operator: string; slug: string }
 
@@ -51,10 +56,14 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
   const availability = await availabilityByDeparture(departures);
 
   const content: TripContent = trip.content ?? {};
-  const accent = safeColour(operator.brand?.primaryColour) ?? 'var(--tg-accent)';
+
+  // The operator's colour, checked against the white the page actually renders
+  // on and nudged only if it fails. It keeps their hue, so it still reads as
+  // their brand rather than being swapped for ours.
+  const accent = readableOn(operator.brand?.primaryColour, PAGE_BACKGROUND, '#0e6e5c');
 
   return (
-    <main className="t-page">
+    <main className="t-page" style={{ ["--op-accent" as string]: accent }}>
       {trip.hero_image_url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="t-hero" src={trip.hero_image_url} alt="" />
@@ -97,7 +106,7 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
                   <span className="t-when">
                     {formatDate(d.starts_on)} to {formatDate(d.ends_on)}
                   </span>
-                  <span className="t-price" style={{ color: accent }}>
+                  <span className="t-price">
                     {price ?? 'Price on request'}
                     {deposit && <small className="t-deposit">{deposit} deposit</small>}
                   </span>
@@ -199,7 +208,7 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
               <li key={i}>
                 <span>
                   {x.name}
-                  {x.recommended && <em className="t-flag" style={{ color: accent }}>Recommended</em>}
+                  {x.recommended && <em className="t-flag">Recommended</em>}
                   {x.note && <small>{x.note}</small>}
                 </span>
                 <span className="t-extra-price">
@@ -287,12 +296,6 @@ function describeAvailability(seats: { capacity: number; remaining: number; sold
   if (seats.soldOut) return 'Sold out';
   if (seats.remaining <= 3) return `Only ${seats.remaining} left`;
   return `${seats.remaining} places left`;
-}
-
-/** Operator brand colours are author-supplied, so they are whitelisted rather
- *  than interpolated. Anything that is not a plain hex is ignored. */
-function safeColour(value: string | undefined): string | null {
-  return value && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value : null;
 }
 
 function formatDate(iso: string): string {
