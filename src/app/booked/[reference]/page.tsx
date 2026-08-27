@@ -60,6 +60,7 @@ export default async function BookedPage({
           {c.starts_on && c.ends_on && (
             <div><dt>Dates</dt><dd>{humanDate(c.starts_on)} to {humanDate(c.ends_on)}</dd></div>
           )}
+          {c.package_name && <div><dt>Room</dt><dd>{c.package_name}</dd></div>}
           <div><dt>Travelling</dt><dd>{c.party_size} {c.party_size === 1 ? 'person' : 'people'}</dd></div>
           {total && <div><dt>Total</dt><dd className="bk-money">{total}</dd></div>}
           {deposit && held && <div><dt>Deposit to secure</dt><dd className="bk-money">{deposit}</dd></div>}

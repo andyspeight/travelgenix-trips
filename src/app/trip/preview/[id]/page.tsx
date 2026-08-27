@@ -13,7 +13,7 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listOpenDepartures } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listOpenDepartures, listPackages } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { TripView } from '../../trip-view';
@@ -36,6 +36,7 @@ export default async function TripPreviewPage({ params }: { params: Promise<{ id
 
   const departures = await listOpenDepartures(trip.id);
   const availability = await availabilityByDeparture(departures);
+  const packages = await listPackages(trip.id);
 
   const published = trip.status === 'published';
 
@@ -68,7 +69,7 @@ export default async function TripPreviewPage({ params }: { params: Promise<{ id
         </a>
       </div>
 
-      <TripView operator={operator} trip={trip} departures={departures} availability={availability} />
+      <TripView operator={operator} trip={trip} departures={departures} availability={availability} packages={packages} />
     </>
   );
 }

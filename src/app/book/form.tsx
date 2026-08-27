@@ -9,7 +9,7 @@ import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createBookingAction, EMPTY_BOOKING_STATE } from './actions';
 import { MAX_PARTY } from '@/lib/booking';
-import type { Departure } from '@/lib/types';
+import type { Departure, Package } from '@/lib/types';
 
 function money(pence: number | null | undefined, currency: string): string | null {
   if (typeof pence !== 'number' || pence <= 0) return null;
@@ -28,9 +28,9 @@ function Submit() {
 }
 
 export function BookingForm({
-  departures, currency, initialDeparture,
+  departures, packages = [], currency, initialDeparture,
 }: {
-  departures: Departure[]; currency: string; initialDeparture?: string;
+  departures: Departure[]; packages?: Package[]; currency: string; initialDeparture?: string;
 }) {
   const [state, action] = useActionState(createBookingAction, EMPTY_BOOKING_STATE);
 
@@ -42,6 +42,8 @@ export function BookingForm({
 
   const [departureId, setDepartureId] = useState(validInitial);
   const [party, setParty] = useState(1);
+  // If the trip offers packages, one is always chosen: default to the first.
+  const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
   const [lead, setLead] = useState({ name: '', email: '', phone: '' });
   const [names, setNames] = useState<string[]>([]);
 
@@ -86,6 +88,28 @@ export function BookingForm({
         />
         {e.party_size && <p className="bk-err">{e.party_size}</p>}
       </label>
+
+      {packages.length > 0 && (
+        <fieldset className="bk-field">
+          <legend>Room option</legend>
+          <input type="hidden" name="package_id" value={packageId} />
+          <div className="bk-dates">
+            {packages.map((p) => {
+              const price = money(p.price_pence, currency);
+              return (
+                <label key={p.id} className="bk-date">
+                  <input type="radio" name="package_choice" value={p.id}
+                    checked={packageId === p.id} onChange={() => setPackageId(p.id)} />
+                  <span className="bk-date-when">
+                    {p.name}{p.occupancy > 1 ? ` · sleeps ${p.occupancy}` : ''}
+                  </span>
+                  <span className="bk-date-price">{price ?? 'Included'}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
 
       <div className="bk-section">
         <h2>Lead traveller</h2>

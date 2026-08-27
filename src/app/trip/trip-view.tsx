@@ -17,7 +17,7 @@ import { format as money } from '@/lib/money';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { safeImageUrl, isVideoUrl } from '@/lib/url';
-import type { Departure, TripContent, TripSection, Operator, Trip } from '@/lib/types';
+import type { Departure, TripContent, TripSection, Operator, Trip, Package } from '@/lib/types';
 import type { Availability } from '@/lib/capacity';
 
 // Trip pages are deliberately light-only, so this is the ground every operator
@@ -25,12 +25,13 @@ import type { Availability } from '@/lib/capacity';
 export const PAGE_BACKGROUND = '#ffffff';
 
 export function TripView({
-  operator, trip, departures, availability,
+  operator, trip, departures, availability, packages = [],
 }: {
   operator: Operator;
   trip: Trip;
   departures: Departure[];
   availability: Map<string, Availability>;
+  packages?: Package[];
 }) {
   const content: TripContent = trip.content ?? {};
 
@@ -223,6 +224,15 @@ export function TripView({
               </section>
             )}
 
+            {packages.length > 0 && (
+              <section>
+                <h2>Room options</h2>
+                <ul className="t-packages">
+                  {packages.map((p) => <PackageCard key={p.id} pkg={p} currency={trip.currency} />)}
+                </ul>
+              </section>
+            )}
+
             {content.sections?.map((section, i) => <Section key={i} section={section} />)}
 
             {content.gallery && content.gallery.length > 0 && (
@@ -316,6 +326,32 @@ function OfferRail({
         )}
       </div>
     </div>
+  );
+}
+
+/** A room type on the public page: photo, price and a link, the three things
+ *  WeTravel's rooming is missing. */
+function PackageCard({ pkg, currency }: { pkg: Package; currency: string }) {
+  const img = safeImageUrl(pkg.image_url);
+  const price = money(pkg.price_pence, currency);
+  const info = pkg.info_url && /^https:\/\//i.test(pkg.info_url) ? pkg.info_url : null;
+
+  return (
+    <li className="t-package">
+      {img && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={img} alt="" loading="lazy" />
+      )}
+      <div className="t-package-body">
+        <div className="t-package-head">
+          <h3>{pkg.name}</h3>
+          {price && <span className="t-package-price">{price}<small> pp</small></span>}
+        </div>
+        {pkg.occupancy > 1 && <p className="t-package-occ">Sleeps {pkg.occupancy}</p>}
+        {pkg.description && <p className="t-package-desc">{pkg.description}</p>}
+        {info && <a href={info} target="_blank" rel="noopener noreferrer" className="t-package-link">More details</a>}
+      </div>
+    </li>
   );
 }
 

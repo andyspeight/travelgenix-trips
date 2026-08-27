@@ -36,7 +36,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
   const detail = await getBookingDetail(id, operator.id);
   if (!detail) notFound();
 
-  const { booking, form, waiver, responses, signatures, trip, registrationComplete } = detail;
+  const { booking, form, waiver, responses, signatures, trip, packageName, registrationComplete } = detail;
 
   // Field key -> label, so an answer reads as a question rather than a code.
   const labels = new Map<string, RegField>((form?.schema ?? []).map((f) => [f.key, f]));
@@ -65,6 +65,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
       <p className="c-sub">
         <span className={`c-pill c-pill--bk-${booking.status}`}>{STATUS_LABEL[booking.status] ?? booking.status}</span>{' '}
         {trip ? `${trip.title} · ` : ''}{booking.party_size} {booking.party_size === 1 ? 'traveller' : 'travellers'}
+        {packageName ? ` · ${packageName}` : ''}
       </p>
 
       <p className={`c-note ${registrationComplete ? 'c-note--ok' : 'c-note--calm'}`}>

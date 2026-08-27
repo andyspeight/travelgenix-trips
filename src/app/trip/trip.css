@@ -387,3 +387,21 @@
 .bk-cta--ghost { background: transparent; color: var(--op-accent); border: 1px solid var(--op-hairline, #d4d9dd); }
 .bk-cta--ghost:hover { filter: none; background: var(--op-wash, #fafafa); }
 a.bk-cta { display: block; text-align: center; text-decoration: none; }
+
+/* ---------------------------------------------------------------------------
+   Room options / packages on the public trip page (phase 5).
+   --------------------------------------------------------------------------- */
+.t-packages { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.t-package {
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--op-rule, #e3e7ea); border-radius: 12px; background: #fff;
+}
+.t-package > img { width: 100%; height: 170px; object-fit: cover; display: block; background: var(--op-wash, #f5f5f2); }
+.t-package-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+.t-package-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.t-package-head h3 { margin: 0; font-size: 1.02rem; letter-spacing: -.01em; }
+.t-package-price { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--op-accent); white-space: nowrap; }
+.t-package-price small { font-weight: 500; font-size: .72em; color: var(--op-muted, #59626a); }
+.t-package-occ { margin: 0; font-size: 13px; color: var(--op-muted, #59626a); }
+.t-package-desc { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--op-ink-2, #3b434b); }
+.t-package-link { align-self: flex-start; margin-top: 6px; font-size: 14px; font-weight: 500; }
