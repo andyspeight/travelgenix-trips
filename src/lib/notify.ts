@@ -18,6 +18,10 @@
 import 'server-only';
 import { format as money } from './money.ts';
 
+// Where the traveller-facing pages live, for links inside emails. The custom
+// domain by default; overridable for other hosts.
+const PUBLIC_ORIGIN = (process.env.TRIPS_PUBLIC_ORIGIN || 'https://trips.travelify.io').replace(/\/+$/, '');
+
 export interface EmailMessage {
   to: string;
   replyTo?: string;
@@ -130,6 +134,9 @@ export async function sendTravellerConfirmation(ctx: BookingEmailContext): Promi
       ? `We are holding your place until ${humanDateTime(ctx.holdExpiresAt)}. ${ctx.operatorName} will be in touch to take payment and confirm.`
       : `${ctx.operatorName} will be in touch shortly to confirm your booking and arrange payment.`,
     ``,
+    `Add your travellers' details and complete your booking here:`,
+    `${PUBLIC_ORIGIN}/register/${ctx.reference}`,
+    ``,
     `See you soon,`,
     ctx.operatorName,
   ].filter((l) => l !== null);
@@ -160,6 +167,31 @@ export async function sendOperatorNotice(ctx: BookingEmailContext, operatorEmail
   return safeSend({
     to: operatorEmail,
     subject: `New booking: ${ctx.tripTitle}, ${ctx.reference}`,
+    body,
+  });
+}
+
+/** A gentle nudge to a traveller who booked but has not finished their details.
+ *  Sent at most once, by the scheduled reminder. */
+export async function sendRegistrationReminder(ctx: BookingEmailContext): Promise<{ ok: boolean; detail: string }> {
+  const body = [
+    `Hi ${firstName(ctx.leadName)},`,
+    ``,
+    `A quick reminder about your booking of ${ctx.tripTitle} with ${ctx.operatorName}.`,
+    ``,
+    `Please add each traveller's details and complete anything ${ctx.operatorName} needs:`,
+    `${PUBLIC_ORIGIN}/register/${ctx.reference}`,
+    ``,
+    `Your reference is ${ctx.reference}.`,
+    ``,
+    `Thanks,`,
+    ctx.operatorName,
+  ].join('\n');
+
+  return safeSend({
+    to: ctx.leadEmail,
+    replyTo: ctx.operatorReplyTo ?? undefined,
+    subject: `A quick reminder about your ${ctx.tripTitle} booking`,
     body,
   });
 }

@@ -17,10 +17,10 @@
 import { redirect } from 'next/navigation';
 import { validateBooking } from '@/lib/booking';
 import { validateWaitlist } from '@/lib/validate';
-import { takeHold, getConfirmation, joinWaitlist } from '@/lib/repo';
+import { takeHold, getConfirmation, joinWaitlist, getBookingOperatorContact } from '@/lib/repo';
 import { holdMessage } from '@/lib/hold';
 import { fail, type ActionState } from '@/lib/action-state';
-import { sendTravellerConfirmation } from '@/lib/notify';
+import { sendTravellerConfirmation, sendOperatorNotice } from '@/lib/notify';
 // A 'use server' module may export ONLY async functions. The state shape and its
 // empty value therefore live in action-state.ts, not here: a plain const or
 // interface exported from this file does not survive the client boundary, and a
@@ -88,9 +88,14 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
         holdExpiresAt: c.hold_expires_at,
       };
       await sendTravellerConfirmation(ctx);
-      // The operator's own notice needs their email, an operator-gated field
-      // the public confirmation does not carry. They see the booking in the
-      // console the instant it lands, so the email is a phase-2 nicety.
+
+      // The operator's own new-booking notice. Their email is operator-gated, so
+      // it is looked up by the booking id we just created, never carried on the
+      // public confirmation. Best-effort like everything post-hold.
+      const opc = await getBookingOperatorContact(outcome.booking.id);
+      if (opc?.email) {
+        await sendOperatorNotice({ ...ctx, operatorReplyTo: opc.replyTo }, opc.email);
+      }
     }
   } catch {
     // Swallowed: the hold stands regardless.

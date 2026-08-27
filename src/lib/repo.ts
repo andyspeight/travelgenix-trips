@@ -23,7 +23,7 @@ import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -946,6 +946,83 @@ export async function getTripManage(tripId: string, operatorId: string): Promise
     counts: { bookings: liveBookings, participants, heads },
     bookings,
   };
+}
+
+// ---------------------------------------------------------------------------
+//  Automated emails — the operator's contact for a booking, and the pool of
+//  bookings due a one-time registration reminder.
+// ---------------------------------------------------------------------------
+
+/** The operator's own contact for a booking, for the new-booking notice. Gated
+ *  by the booking id, which the caller has just created. */
+export async function getBookingOperatorContact(bookingId: string): Promise<{ email: string; replyTo: string | null; name: string } | null> {
+  if (!isUuid(bookingId)) return null;
+  const rows = await sbRequest<Array<{ operator: { contact_email: string; name: string; brand: OperatorBrand | null } }>>(
+    `gt_bookings?id=eq.${bookingId}&select=operator:gt_operators(contact_email,name,brand)&limit=1`,
+  ).catch(() => null);
+  const op = rows?.[0]?.operator;
+  if (!op?.contact_email) return null;
+  return { email: op.contact_email, replyTo: op.brand?.replyTo ?? null, name: op.name };
+}
+
+export interface ReminderBooking {
+  id: string;
+  reference: string;
+  party_size: number;
+  total_pence: number | null;
+  deposit_pence: number | null;
+  currency: string;
+  traveller_name: string | null;
+  traveller_email: string | null;
+  starts_on: string | null;
+  ends_on: string | null;
+  trip_title: string;
+  operator_name: string;
+  operator_reply_to: string | null;
+}
+
+/** Bookings that booked but may not have finished, due a one-time nudge: still
+ *  live, 2 to 14 days old, and never reminded. Bounded so a run is quick. */
+export async function findBookingsToRemind(limit = 50): Promise<ReminderBooking[]> {
+  const now = Date.now();
+  const twoDaysAgo = new Date(now - 2 * 86400000).toISOString();
+  const fourteenDaysAgo = new Date(now - 14 * 86400000).toISOString();
+
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?status=in.(pending,deposit_paid)&reminder_sent_at=is.null` +
+      `&created_at=lte.${twoDaysAgo}&created_at=gte.${fourteenDaysAgo}` +
+      `&traveller_email=not.is.null` +
+      `&select=id,reference,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name,brand)))` +
+      `&order=created_at.asc&limit=${limit}`,
+  ).catch(() => null);
+
+  return (rows ?? []).map((r) => {
+    const dep = (r.departure ?? {}) as Record<string, unknown>;
+    const trip = (dep.trip ?? {}) as Record<string, unknown>;
+    const op = (trip.operator ?? {}) as Record<string, unknown>;
+    const brand = (op.brand ?? null) as OperatorBrand | null;
+    return {
+      id: String(r.id),
+      reference: String(r.reference),
+      party_size: Number(r.party_size),
+      total_pence: (r.total_pence as number) ?? null,
+      deposit_pence: (r.deposit_pence as number) ?? null,
+      currency: String(r.currency ?? 'gbp'),
+      traveller_name: (r.traveller_name as string) ?? null,
+      traveller_email: (r.traveller_email as string) ?? null,
+      starts_on: (dep.starts_on as string) ?? null,
+      ends_on: (dep.ends_on as string) ?? null,
+      trip_title: String(trip.title ?? 'your trip'),
+      operator_name: String(op.name ?? 'the operator'),
+      operator_reply_to: brand?.replyTo ?? null,
+    };
+  });
+}
+
+export async function markBookingReminded(bookingId: string): Promise<void> {
+  if (!isUuid(bookingId)) return;
+  await sbUpdate('gt_bookings', `id=eq.${bookingId}`, { reminder_sent_at: nowIso() }).catch(() => []);
 }
 
 // ---------------------------------------------------------------------------
