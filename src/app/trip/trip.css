@@ -342,3 +342,48 @@
 /* video renders like its image counterpart */
 .t-hero video { display: block; width: 100%; height: clamp(280px, 52vh, 560px); object-fit: cover; }
 .t-gallery video { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block; background: #000; }
+
+/* ---------------------------------------------------------------------------
+   Registration (/register) and the booked-page call to action. Reuses the bk-
+   world above; these are only the pieces that layer on top of it.
+   --------------------------------------------------------------------------- */
+
+.bk-sub-line { color: var(--op-muted, #59626a); font-size: 14px; margin: 8px 0 0; }
+.bk-sub-line strong { color: var(--op-ink, #12161a); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+
+/* textarea and select share the input styling the bk-field only gave <input> */
+.bk-field textarea, .bk-field select {
+  font: inherit; width: 100%; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--op-hairline, #d4d9dd); background: #fff; color: var(--op-ink, #12161a);
+}
+.bk-field textarea { resize: vertical; min-height: 76px; }
+.bk-field textarea:focus, .bk-field select:focus { outline: 2px solid var(--op-accent); outline-offset: 1px; border-color: transparent; }
+
+.reg-req { color: var(--tg-danger, #b3421f); font-style: normal; font-weight: 700; }
+
+.reg-check { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; line-height: 1.4; cursor: pointer; }
+.reg-check input { accent-color: var(--op-accent); width: 18px; height: 18px; margin-top: 1px; flex: none; }
+.reg-check span { color: var(--op-ink-2, #3b434b); }
+
+.reg-waiver {
+  max-height: 260px; overflow-y: auto; background: var(--op-wash, #fafafa);
+  border: 1px solid var(--op-rule, #e3e7ea); border-radius: 8px; padding: 14px 16px;
+  font-size: 14px; line-height: 1.6; color: var(--op-ink-2, #3b434b);
+}
+.reg-waiver p { margin: 0 0 10px; }
+.reg-waiver p:last-child { margin-bottom: 0; }
+
+.reg-sign { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--op-rule, #e3e7ea); border-radius: 8px; }
+.reg-sign.bk-bad { border-color: var(--tg-danger, #b3421f); }
+.reg-sign-name {
+  font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--op-hairline, #d4d9dd);
+  background: #fff; font-family: var(--op-font, inherit); font-style: italic;
+}
+.reg-sign-name:focus { outline: 2px solid var(--op-accent); outline-offset: 1px; border-color: transparent; }
+
+/* booked-page call to action */
+.bk-reg-cta, .bk-reg-done { margin: 4px 0 18px; display: flex; flex-direction: column; gap: 12px; }
+.bk-reg-cta p, .bk-reg-done p { margin: 0; color: var(--op-ink-2, #3b434b); line-height: 1.5; }
+.bk-cta--ghost { background: transparent; color: var(--op-accent); border: 1px solid var(--op-hairline, #d4d9dd); }
+.bk-cta--ghost:hover { filter: none; background: var(--op-wash, #fafafa); }
+a.bk-cta { display: block; text-align: center; text-decoration: none; }

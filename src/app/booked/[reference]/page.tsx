@@ -16,8 +16,14 @@ import { tripsDbConfigured } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Booking confirmed' };
 
-export default async function BookedPage({ params }: { params: Promise<{ reference: string }> }) {
+export default async function BookedPage({
+  params, searchParams,
+}: {
+  params: Promise<{ reference: string }>;
+  searchParams: Promise<{ registered?: string }>;
+}) {
   const { reference } = await params;
+  const { registered } = await searchParams;
   if (!tripsDbConfigured()) notFound();
 
   // params are already decoded by Next; a second decode throws on a lone '%'.
@@ -26,6 +32,7 @@ export default async function BookedPage({ params }: { params: Promise<{ referen
 
   const c = await getConfirmation(ref);
   if (!c) notFound();
+  const justRegistered = registered === '1';
 
   const total = money(c.total_pence, c.currency);
   const deposit = money(c.deposit_pence, c.currency);
@@ -68,6 +75,20 @@ export default async function BookedPage({ params }: { params: Promise<{ referen
             <>Thank you. {c.operator_name} has your booking and will be in touch with the details.</>
           )}
         </p>
+
+        {!dead && (
+          justRegistered ? (
+            <div className="bk-reg-done">
+              <p>Thank you, we have your travellers’ details. You can update them any time using the button below.</p>
+              <a className="bk-cta bk-cta--ghost" href={`/register/${c.reference}`}>Review or update details</a>
+            </div>
+          ) : (
+            <div className="bk-reg-cta">
+              <p>Next, add each traveller’s details{c.party_size > 1 ? ' for your party' : ''} and complete anything {c.operator_name} needs.</p>
+              <a className="bk-cta" href={`/register/${c.reference}`}>Complete your booking</a>
+            </div>
+          )
+        )}
 
         {!dead && <p className="bk-note">No card has been charged. Online payment is coming soon.</p>}
       </div>

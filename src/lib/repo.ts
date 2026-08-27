@@ -84,6 +84,14 @@ export async function getOperatorBySlug(slug: string): Promise<Operator | null> 
   return rows?.[0] ?? null;
 }
 
+/** By id, for callers (registration, the manifest) that only have the id and
+ *  need the operator's brand. */
+export async function getOperatorById(id: string): Promise<Operator | null> {
+  if (!isUuid(id)) return null;
+  const rows = await sbRequest<Operator[]>(`gt_operators?id=eq.${id}&select=*&limit=1`).catch(() => null);
+  return rows?.[0] ?? null;
+}
+
 // ---------------------------------------------------------------------------
 //  Trips
 // ---------------------------------------------------------------------------
