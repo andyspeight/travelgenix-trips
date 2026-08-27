@@ -130,6 +130,13 @@ function BookingsTab({ bookings, currency }: { bookings: TripBooking[]; currency
         <tbody>
           {bookings.map((b) => {
             const faded = b.status === 'cancelled' || b.status === 'expired';
+            // Outstanding, the same basis as the trip summary: nothing collected
+            // while held, the deposit once deposit_paid, all of it once paid.
+            const t = b.total_pence ?? 0;
+            const outstanding = faded ? null
+              : b.status === 'paid' ? 0
+              : b.status === 'deposit_paid' ? Math.max(0, t - (b.deposit_pence ?? 0))
+              : t;
             return (
               <tr key={b.id} style={faded ? { opacity: 0.55 } : undefined}>
                 <td className="c-mono"><a href={`/console/bookings/${b.id}`}>{b.reference ?? '—'}</a></td>
@@ -139,7 +146,7 @@ function BookingsTab({ bookings, currency }: { bookings: TripBooking[]; currency
                 <td className="c-num">{b.party_size}</td>
                 <td><span className={`c-pill c-pill--bk-${b.status}`}>{STATUS_LABEL[b.status] ?? b.status}</span></td>
                 <td className="c-num c-money">{money(b.total_pence, currency) ?? '—'}</td>
-                <td className="c-num c-money">{money(b.balance_pence, currency) ?? '—'}</td>
+                <td className="c-num c-money">{outstanding === 0 ? '—' : money(outstanding, currency) ?? '—'}</td>
               </tr>
             );
           })}
