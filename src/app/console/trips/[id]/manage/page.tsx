@@ -9,7 +9,10 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripManage, listWaitlist, type TripBooking } from '@/lib/repo';
+import {
+  ensureOperator, getTripManage, listWaitlist,
+  listMessageTemplates, listTripMessages, broadcastSegments, type TripBooking,
+} from '@/lib/repo';
 import { participantRows } from '@/lib/participants';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { format as money } from '@/lib/money';
@@ -17,6 +20,7 @@ import { safeImageUrl } from '@/lib/url';
 import { setWaitlistStatusAction } from '../../../actions';
 import { SignInPrompt, NoOperator, DbMissing } from '../../../states';
 import { BookingsTable } from './bookings-table';
+import { MessagesTab } from './messages-tab';
 import type { WaitlistEntry } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +30,7 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelled', expired: 'Expired',
 };
 
-type Tab = 'bookings' | 'participants' | 'waitlist';
+type Tab = 'bookings' | 'participants' | 'waitlist' | 'messages';
 
 export default async function ManageTripPage({
   params, searchParams,
@@ -36,7 +40,10 @@ export default async function ManageTripPage({
 }) {
   const { id } = await params;
   const { tab: tabRaw } = await searchParams;
-  const tab: Tab = tabRaw === 'participants' ? 'participants' : tabRaw === 'waitlist' ? 'waitlist' : 'bookings';
+  const tab: Tab = tabRaw === 'participants' ? 'participants'
+    : tabRaw === 'waitlist' ? 'waitlist'
+    : tabRaw === 'messages' ? 'messages'
+    : 'bookings';
 
   const session = await getSession();
   if (!session) return <SignInPrompt />;
@@ -50,6 +57,11 @@ export default async function ManageTripPage({
 
   const { trip, money: m, counts, bookings } = data;
   const waitlist = await listWaitlist(id, operator.id);
+
+  // Only the messages tab needs the template and history queries.
+  const [templates, messages] = tab === 'messages'
+    ? await Promise.all([listMessageTemplates(operator.id), listTripMessages(id, operator.id)])
+    : [[], []];
   const hero = safeImageUrl(trip.hero_image_url);
   const base = `/console/trips/${trip.id}/manage`;
 
@@ -99,7 +111,9 @@ export default async function ManageTripPage({
         <a href={`${base}?tab=waitlist`} aria-current={tab === 'waitlist' ? 'page' : undefined}>
           Waitlist <span className="mt-count">{waitlist.length}</span>
         </a>
-        <span className="mt-soon" title="Coming soon">Messages</span>
+        <a href={`${base}?tab=messages`} aria-current={tab === 'messages' ? 'page' : undefined}>
+          Messages
+        </a>
         <span className="mt-soon" title="Coming soon">Promote</span>
       </nav>
 
@@ -111,8 +125,10 @@ export default async function ManageTripPage({
         )
       ) : tab === 'participants' ? (
         <ParticipantsTab bookings={bookings} tripId={trip.id} />
-      ) : (
+      ) : tab === 'waitlist' ? (
         <WaitlistTab entries={waitlist} tripId={trip.id} />
+      ) : (
+        <MessagesTab tripId={trip.id} segments={broadcastSegments(bookings)} templates={templates} messages={messages} />
       )}
     </>
   );

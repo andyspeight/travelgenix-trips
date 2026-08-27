@@ -207,6 +207,23 @@ export interface Signature {
   body_sha256: string;
 }
 
+export interface MessageTemplate {
+  id: string;
+  operator_id: string;
+  name: string;
+  subject: string;
+  body: string;
+}
+
+export interface TripMessage {
+  id: string;
+  subject: string;
+  body: string;
+  segment: { status?: string; room?: string };
+  recipient_count: number;
+  created_at: string;
+}
+
 export type WaitlistStatus = 'waiting' | 'invited' | 'converted' | 'removed';
 
 export interface WaitlistEntry {

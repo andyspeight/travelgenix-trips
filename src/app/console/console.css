@@ -316,3 +316,21 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 .c-pill--wl-invited { color: var(--tg-accent); }
 .c-pill--wl-converted { color: var(--tg-accent); }
 .c-pill--wl-removed { color: var(--tg-muted); }
+
+/* ---------------------------------------------------------------------------
+   Messages tab — compose + templates/history sidebar.
+   --------------------------------------------------------------------------- */
+.msg-grid { display: grid; grid-template-columns: 1fr 260px; gap: 28px; align-items: start; }
+@media (max-width: 760px) { .msg-grid { grid-template-columns: 1fr; } }
+.msg-save { display: flex; gap: 8px; margin-top: 12px; }
+.msg-save input { flex: 1 1; font: inherit; font-size: 14px; padding: 8px 11px; border: 1px solid var(--tg-rule); border-radius: var(--tg-radius); background: var(--tg-surface); color: var(--tg-ink); }
+.msg-side { display: flex; flex-direction: column; gap: 22px; }
+.msg-block h3 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--tg-muted); margin: 0 0 10px; }
+.msg-templates, .msg-sent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.msg-templates li { display: flex; align-items: center; gap: 4px; }
+.msg-tmpl-use { flex: 1 1; text-align: left; font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid var(--tg-rule); border-radius: var(--tg-radius); background: var(--tg-surface); color: var(--tg-ink); cursor: pointer; }
+.msg-tmpl-use:hover { border-color: var(--tg-accent); }
+.msg-sent li { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-top: 1px solid var(--tg-rule); }
+.msg-sent li:first-child { border-top: 0; }
+.msg-sent strong { font-size: 14px; font-weight: 600; }
+.msg-sent span { font-size: 12.5px; color: var(--tg-muted); }

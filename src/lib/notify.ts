@@ -37,12 +37,53 @@ const logTransport: EmailTransport = async (msg) => {
   return { ok: true, detail: 'logged (no provider configured)' };
 };
 
-// When a provider is wired, replace this with the real transport. Everything
-// else in the file stays exactly as it is.
-const transport: EmailTransport = logTransport;
+// Brevo transactional email, activated by env. The estate already uses Brevo, so
+// this is the same account. From address and sender name come from env; nothing
+// is hard-coded. When BREVO_API_KEY is absent this whole thing is skipped and
+// the log transport runs, so the flow is complete without a key (the same seam
+// pattern as Stripe). Reply-to carries the operator's own address when present.
+const BREVO_KEY = process.env.BREVO_API_KEY || '';
+const FROM_EMAIL = process.env.TRIPS_EMAIL_FROM || '';
+const FROM_NAME = process.env.TRIPS_EMAIL_FROM_NAME || 'Travelgenix Trips';
+
+const brevoTransport: EmailTransport = async (msg) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { email: FROM_EMAIL, name: FROM_NAME },
+        to: [{ email: msg.to }],
+        replyTo: msg.replyTo ? { email: msg.replyTo } : undefined,
+        subject: msg.subject,
+        textContent: msg.body,
+      }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { ok: false, detail: `brevo ${res.status}: ${text.slice(0, 160)}` };
+    }
+    return { ok: true, detail: 'sent via brevo' };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+// The real transport is used only when a key AND a from address are configured;
+// otherwise the log transport keeps the flow whole.
+const transport: EmailTransport = BREVO_KEY && FROM_EMAIL ? brevoTransport : logTransport;
 
 export function emailProviderConfigured(): boolean {
   return transport !== logTransport;
+}
+
+/** Send one email. Never throws (safeSend swallows), so a broadcast loop cannot
+ *  be broken by one bad address. Returns per-message success for a sent count. */
+export async function sendEmail(msg: EmailMessage): Promise<{ ok: boolean; detail: string }> {
+  return safeSend(msg);
 }
 
 export interface BookingEmailContext {

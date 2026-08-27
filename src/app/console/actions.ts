@@ -44,6 +44,10 @@ import {
   removePackage,
   bulkSetBookingStatus,
   setWaitlistStatus,
+  sendTripBroadcast,
+  parseSegment,
+  saveMessageTemplate,
+  deleteMessageTemplate,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -215,6 +219,53 @@ export async function setWaitlistStatusAction(form: FormData): Promise<void> {
 
   await setWaitlistStatus(id, tripId, ctx.operatorId, status);
   revalidatePath(`/console/trips/${tripId}/manage`);
+}
+
+// ---------------------------------------------------------------------------
+//  Messaging — broadcast to a trip, and reusable templates.
+// ---------------------------------------------------------------------------
+
+export async function sendBroadcastAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const tripId = String(form.get('id') || '');
+  const subject = String(form.get('subject') || '').trim().slice(0, 200);
+  const body = String(form.get('body') || '').trim().slice(0, 10000);
+  const segment = parseSegment(String(form.get('segment') || 'all'));
+
+  const errors: Record<string, string> = {};
+  if (!subject) errors.subject = 'Give the message a subject.';
+  if (!body) errors.body = 'Write the message.';
+  if (Object.keys(errors).length) return fail(errors, 'Check the highlighted fields.');
+
+  const res = await sendTripBroadcast(tripId, ctx.operatorId, { subject, body, segment });
+  if (!res) return fail({}, 'That trip could not be found.');
+  if (res.total === 0) return fail({}, 'No one matches that group, so nothing was sent.');
+
+  revalidatePath(`/console/trips/${tripId}/manage`);
+  return { ok: true, errors: {}, message: `Sent to ${res.sent} of ${res.total} ${res.total === 1 ? 'person' : 'people'}.` };
+}
+
+export async function saveTemplateAction(form: FormData): Promise<void> {
+  const ctx = await requireOperator();
+  if (!ctx) return;
+
+  const name = String(form.get('name') || '').trim().slice(0, 120);
+  const subject = String(form.get('subject') || '').trim().slice(0, 200);
+  const body = String(form.get('body') || '').trim().slice(0, 10000);
+  if (!name || !subject || !body) return;
+
+  await saveMessageTemplate(ctx.operatorId, { name, subject, body });
+  revalidatePath(`/console/trips/${String(form.get('trip_id') || '')}/manage`);
+}
+
+export async function deleteTemplateAction(form: FormData): Promise<void> {
+  const ctx = await requireOperator();
+  if (!ctx) return;
+
+  await deleteMessageTemplate(String(form.get('id') || ''), ctx.operatorId);
+  revalidatePath(`/console/trips/${String(form.get('trip_id') || '')}/manage`);
 }
 
 // ---------------------------------------------------------------------------

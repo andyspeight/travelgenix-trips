@@ -22,7 +22,8 @@ import type { TripInput, DepartureInput, PackageInput, WaitlistInput } from './v
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
-import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry } from './types.ts';
+import { sendEmail } from './notify.ts';
+import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -945,6 +946,127 @@ export async function getTripManage(tripId: string, operatorId: string): Promise
     counts: { bookings: liveBookings, participants, heads },
     bookings,
   };
+}
+
+// ---------------------------------------------------------------------------
+//  Messaging — broadcast to a trip's travellers, and reusable templates. All
+//  operator-gated. Sending goes through the notify seam, so it composes and
+//  records now and actually delivers the moment an email key is configured.
+// ---------------------------------------------------------------------------
+
+export async function listMessageTemplates(operatorId: string): Promise<MessageTemplate[]> {
+  return (
+    (await sbRequest<MessageTemplate[]>(
+      `gt_message_templates?operator_id=eq.${operatorId}&select=*&order=created_at.desc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+export async function saveMessageTemplate(
+  operatorId: string,
+  input: { name: string; subject: string; body: string },
+): Promise<MessageTemplate | null> {
+  const rows = await sbInsert<MessageTemplate>('gt_message_templates', { operator_id: operatorId, ...input });
+  return rows[0] ?? null;
+}
+
+export async function deleteMessageTemplate(id: string, operatorId: string): Promise<boolean> {
+  if (!isUuid(id)) return false;
+  await sbRequest(`gt_message_templates?id=eq.${id}&operator_id=eq.${operatorId}`, { method: 'DELETE' });
+  return true;
+}
+
+export async function listTripMessages(tripId: string, operatorId: string): Promise<TripMessage[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return (
+    (await sbRequest<TripMessage[]>(
+      `gt_messages?trip_id=eq.${tripId}&operator_id=eq.${operatorId}&select=id,subject,body,segment,recipient_count,created_at&order=created_at.desc&limit=50`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+export interface Recipient { email: string; name: string }
+
+/** The unique traveller emails on a trip that match a segment. Lead and named
+ *  travellers both count; a cancelled or expired booking never does. */
+function recipientsFrom(bookings: TripBooking[], segment: { status?: string; room?: string }): Recipient[] {
+  const byEmail = new Map<string, Recipient>();
+  for (const b of bookings) {
+    if (!LIVE_STATUSES.has(b.status)) continue;
+    if (segment.status && b.status !== segment.status) continue;
+    if (segment.room && (b.package_name ?? '') !== segment.room) continue;
+    const lead = { email: b.traveller_email ?? '', name: b.traveller_name ?? '' };
+    for (const r of [lead, ...(b.travellers || []).map((t) => ({ email: t.email ?? '', name: t.full_name ?? '' }))]) {
+      const email = r.email.trim().toLowerCase();
+      if (email && !byEmail.has(email)) byEmail.set(email, { email, name: r.name });
+    }
+  }
+  return [...byEmail.values()];
+}
+
+/** How many people a segment would reach, without sending. Powers the preview. */
+export async function countRecipients(
+  tripId: string, operatorId: string, segment: { status?: string; room?: string },
+): Promise<number> {
+  const data = await getTripManage(tripId, operatorId);
+  if (!data) return 0;
+  return recipientsFrom(data.bookings, segment).length;
+}
+
+/** Send a broadcast and record it. Sends are best-effort and parallel; one bad
+ *  address never breaks the run. Capped so a serverless invocation cannot run
+ *  away. Returns how many were attempted and how many the provider accepted. */
+export async function sendTripBroadcast(
+  tripId: string,
+  operatorId: string,
+  input: { subject: string; body: string; segment: { status?: string; room?: string } },
+): Promise<{ ok: boolean; total: number; sent: number } | null> {
+  const data = await getTripManage(tripId, operatorId);
+  if (!data) return null;
+
+  const operator = await getOperatorById(operatorId);
+  const replyTo = operator?.brand?.replyTo || operator?.contact_email || undefined;
+
+  const recipients = recipientsFrom(data.bookings, input.segment).slice(0, 500);
+  const results = await Promise.allSettled(
+    recipients.map((r) => sendEmail({ to: r.email, replyTo, subject: input.subject, body: input.body })),
+  );
+  const sent = results.filter((x) => x.status === 'fulfilled' && x.value.ok).length;
+
+  await sbInsert('gt_messages', {
+    operator_id: operatorId, trip_id: tripId,
+    subject: input.subject, body: input.body, segment: input.segment,
+    recipient_count: recipients.length,
+  });
+
+  return { ok: true, total: recipients.length, sent };
+}
+
+const SEG_STATUS_LABEL: Record<string, string> = { pending: 'Held', deposit_paid: 'Deposit paid', paid: 'Paid in full' };
+
+/** The segment options offered in the compose box, each with a live recipient
+ *  count, so the operator sees who a message will reach before sending. */
+export function broadcastSegments(bookings: TripBooking[]): Array<{ id: string; label: string; count: number }> {
+  const opts = [{ id: 'all', label: 'Everyone on this trip', count: recipientsFrom(bookings, {}).length }];
+  for (const st of ['pending', 'deposit_paid', 'paid']) {
+    const count = recipientsFrom(bookings, { status: st }).length;
+    if (count) opts.push({ id: `status:${st}`, label: SEG_STATUS_LABEL[st] ?? st, count });
+  }
+  const rooms = new Set(
+    bookings.filter((b) => LIVE_STATUSES.has(b.status) && b.package_name).map((b) => b.package_name as string),
+  );
+  for (const room of rooms) {
+    const count = recipientsFrom(bookings, { room }).length;
+    if (count) opts.push({ id: `room:${room}`, label: `Room · ${room}`, count });
+  }
+  return opts;
+}
+
+/** Decode a segment id from the compose box into a filter. */
+export function parseSegment(id: string): { status?: string; room?: string } {
+  if (id.startsWith('status:')) return { status: id.slice(7) };
+  if (id.startsWith('room:')) return { room: id.slice(5) };
+  return {};
 }
 
 // ---------------------------------------------------------------------------
