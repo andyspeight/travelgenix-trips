@@ -36,7 +36,7 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
   const detail = await getBookingDetail(id, operator.id);
   if (!detail) notFound();
 
-  const { booking, form, waiver, responses, signatures, trip, packageName, registrationComplete } = detail;
+  const { booking, form, waiver, responses, signatures, trip, packageName, selectedOptions, registrationComplete } = detail;
 
   // Field key -> label, so an answer reads as a question rather than a code.
   const labels = new Map<string, RegField>((form?.schema ?? []).map((f) => [f.key, f]));
@@ -78,6 +78,17 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
         <dl className="c-facts">
           {booking.total_pence != null && <div><dt>Total</dt><dd className="c-money">{money(booking.total_pence, booking.currency) ?? '—'}</dd></div>}
           {booking.balance_pence != null && <div><dt>Outstanding</dt><dd className="c-money">{money(booking.balance_pence, booking.currency) ?? '—'}</dd></div>}
+        </dl>
+      )}
+
+      {selectedOptions.length > 0 && (
+        <dl className="c-facts">
+          {selectedOptions.map((o) => (
+            <div key={o.option_id}>
+              <dt>{o.name}{o.quantity > 1 ? ` ×${o.quantity}` : ''}</dt>
+              <dd className="c-money">{money(o.amount_pence, booking.currency) ?? '—'}</dd>
+            </div>
+          ))}
         </dl>
       )}
 

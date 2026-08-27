@@ -4,7 +4,7 @@
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getPublishedTrip, listOpenDepartures, listPackages } from '@/lib/repo';
+import { getPublishedTrip, listOpenDepartures, listPackages, listOptions } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
@@ -35,6 +35,7 @@ export default async function BookPage({
   const all = await listOpenDepartures(trip.id);
   const availability = await availabilityByDeparture(all);
   const packages = await listPackages(trip.id);
+  const options = await listOptions(trip.id);
   // Only offer departures that still have room. A sold-out date on a booking
   // form is a dead end.
   // A departure only appears if it can actually be held: capacity set, and not
@@ -67,7 +68,7 @@ export default async function BookPage({
           {bookable.length === 0 ? (
             <WaitlistForm tripId={trip.id} operatorName={operator.name} />
           ) : (
-            <BookingForm tripId={trip.id} departures={bookable} packages={packages} currency={trip.currency} initialDeparture={departure} />
+            <BookingForm tripId={trip.id} departures={bookable} packages={packages} options={options} currency={trip.currency} initialDeparture={departure} />
           )}
         </div>
       </div>

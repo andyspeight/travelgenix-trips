@@ -71,6 +71,12 @@ export default async function BookedPage({
           {c.package_name && <div><dt>Room</dt><dd>{c.package_name}</dd></div>}
           <div><dt>Travelling</dt><dd>{c.party_size} {c.party_size === 1 ? 'person' : 'people'}</dd></div>
           {c.promo_code && <div><dt>Discount</dt><dd>{c.promo_code}</dd></div>}
+          {c.selected_options.map((o) => (
+            <div key={o.option_id}>
+              <dt>{o.name}{o.quantity > 1 ? ` ×${o.quantity}` : ''}</dt>
+              <dd className="bk-money">{money(o.amount_pence, c.currency)}</dd>
+            </div>
+          ))}
           {total && <div><dt>Total</dt><dd className="bk-money">{total}</dd></div>}
           {deposit && held && <div><dt>Deposit to secure</dt><dd className="bk-money">{deposit}</dd></div>}
           {balance && held && <div><dt>Balance due later</dt><dd className="bk-money">{balance}</dd></div>}

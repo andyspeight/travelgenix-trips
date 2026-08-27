@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   slugify, isUsableSlug, isSafeHttpUrl, isRealDate, validateTrip, validateDeparture, validatePackage,
+  validateOption,
 } from '../src/lib/validate.ts';
 
 // --------------------------------------------------------------------------
@@ -245,4 +246,43 @@ test('an empty package price means "on request", not zero', () => {
   const r = validatePackage({ name: 'Standard', price_pence: '' });
   assert.equal(r.ok, true);
   assert.equal(r.value.price_pence, null);
+});
+
+// --------------------------------------------------------------------------
+//  Options — priced add-ons
+// --------------------------------------------------------------------------
+
+test('an option reads price as pence and defaults to per-traveller', () => {
+  const r = validateOption({ name: 'Airport transfer', price_pence: '40' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.price_pence, 4000);
+  assert.equal(r.value.per, 'traveller');
+  assert.equal(r.value.is_required, false);
+});
+
+test('an option needs a name', () => {
+  assert.ok(validateOption({ name: '  ' }).errors.name);
+});
+
+test('an option can be charged per booking and marked required', () => {
+  const r = validateOption({ name: 'Private guide', price_pence: '250', per: 'booking', is_required: 'on' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.per, 'booking');
+  assert.equal(r.value.is_required, true);
+});
+
+test('an unknown per falls back to traveller, not an error', () => {
+  const r = validateOption({ name: 'Meals', price_pence: '10', per: 'nonsense' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.per, 'traveller');
+});
+
+test('a blank option price means "no charge", not zero-as-error', () => {
+  const r = validateOption({ name: 'Welcome pack', price_pence: '' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.price_pence, null);
+});
+
+test('an option price beyond the ceiling is rejected', () => {
+  assert.ok(validateOption({ name: 'Yacht', price_pence: '600000' }).errors.price_pence);
 });

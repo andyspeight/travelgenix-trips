@@ -19,12 +19,12 @@ import 'server-only';
 import { sbRequest, sbInsert, sbUpdate, SupabaseError } from './supabase.ts';
 import { slugify } from './validate.ts';
 import { format as fmtMoney } from './money.ts';
-import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput } from './validate.ts';
+import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput } from './validate.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -354,6 +354,67 @@ export async function removePackage(
 }
 
 // ---------------------------------------------------------------------------
+//  Options — priced add-ons and extras (phase 5). Public to read (they show on
+//  the booking form); operator-gated to write. A booking records the extras it
+//  chose as a self-contained jsonb snapshot, so an option can be deleted without
+//  erasing the record of what a traveller booked.
+// ---------------------------------------------------------------------------
+
+export async function listOptions(tripId: string): Promise<TripOption[]> {
+  if (!isUuid(tripId)) return [];
+  return (
+    (await sbRequest<TripOption[]>(
+      `gt_options?trip_id=eq.${tripId}&select=*&order=sort_order.asc,created_at.asc`,
+    )) ?? []
+  );
+}
+
+/** Operator-gated list for the editor: empty for a trip that is not theirs. */
+export async function getOptionsForTrip(tripId: string, operatorId: string): Promise<TripOption[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return listOptions(tripId);
+}
+
+export async function createOption(
+  tripId: string,
+  operatorId: string,
+  input: OptionInput,
+): Promise<TripOption | null> {
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  const rows = await sbInsert<TripOption>('gt_options', { ...input, trip_id: tripId });
+  return rows[0] ?? null;
+}
+
+export async function updateOption(
+  optionId: string,
+  tripId: string,
+  operatorId: string,
+  input: OptionInput,
+): Promise<TripOption | null> {
+  if (!isUuid(optionId)) return null;
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  const rows = await sbUpdate<TripOption>(
+    'gt_options',
+    `id=eq.${optionId}&trip_id=eq.${tripId}`,
+    { ...input, updated_at: nowIso() },
+  );
+  return rows[0] ?? null;
+}
+
+/** Remove an option. Bookings keep their own snapshot of what they chose, so an
+ *  option can be deleted outright without losing that record. */
+export async function removeOption(
+  optionId: string,
+  tripId: string,
+  operatorId: string,
+): Promise<'deleted' | null> {
+  if (!isUuid(optionId)) return null;
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  await sbRequest(`gt_options?id=eq.${optionId}&trip_id=eq.${tripId}`, { method: 'DELETE' });
+  return 'deleted';
+}
+
+// ---------------------------------------------------------------------------
 //  Bookings — the read side (the console). Ownership is on operator_id, and
 //  traveller PII only ever leaves through these operator-gated reads.
 // ---------------------------------------------------------------------------
@@ -494,13 +555,14 @@ export interface Confirmation {
   ends_on: string | null;
   package_name: string | null;
   promo_code: string | null;
+  selected_options: SelectedOption[];
 }
 
 export async function getConfirmation(reference: string): Promise<Confirmation | null> {
   const rows = await sbRequest<Array<Record<string, unknown>>>(
     `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
       `&select=reference,status,party_size,total_pence,deposit_pence,currency,hold_expires_at,` +
-      `traveller_name,traveller_email,package:gt_packages(name),promo:gt_promo_codes(code),` +
+      `traveller_name,traveller_email,selected_options,package:gt_packages(name),promo:gt_promo_codes(code),` +
       `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
   ).catch(() => null);
 
@@ -529,7 +591,31 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
     ends_on: (dep.ends_on as string) ?? null,
     package_name: pkg?.name ? String(pkg.name) : null,
     promo_code: promo?.code ? String(promo.code) : null,
+    selected_options: asSelectedOptions(r.selected_options),
   };
+}
+
+/** Coerce the booking's selected_options jsonb into typed rows, defensively:
+ *  a legacy booking has '[]', and a hand-edited row must never crash a render. */
+function asSelectedOptions(raw: unknown): SelectedOption[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SelectedOption[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== 'object') continue;
+    const o = x as Record<string, unknown>;
+    const name = typeof o.name === 'string' ? o.name : '';
+    const amount = Number(o.amount_pence);
+    if (!name || !Number.isFinite(amount)) continue;
+    out.push({
+      option_id: typeof o.option_id === 'string' ? o.option_id : '',
+      name,
+      per: o.per === 'booking' ? 'booking' : 'traveller',
+      unit_pence: Number.isFinite(Number(o.unit_pence)) ? Number(o.unit_pence) : 0,
+      quantity: Number.isFinite(Number(o.quantity)) ? Number(o.quantity) : 1,
+      amount_pence: amount,
+    });
+  }
+  return out;
 }
 
 
@@ -814,6 +900,7 @@ export interface BookingDetail {
   signatures: Array<{ traveller_id: string | null; signed_name: string; signed_at: string; version: number }>;
   trip: { id: string; title: string } | null;
   packageName: string | null;
+  selectedOptions: SelectedOption[];
   registrationComplete: boolean;
 }
 
@@ -877,7 +964,9 @@ export async function getBookingDetail(bookingId: string, operatorId: string): P
   return {
     booking, form, waiver, responses,
     signatures: signatures.map((s) => ({ ...s, version: waiver?.version ?? 1 })),
-    trip, packageName, registrationComplete,
+    trip, packageName,
+    selectedOptions: asSelectedOptions((booking as unknown as Record<string, unknown>).selected_options),
+    registrationComplete,
   };
 }
 

@@ -48,6 +48,9 @@ export interface HoldRequest {
   /** A promo code to try. The RPC validates and applies it, or ignores it if it
    *  is not valid; it can never block the hold. */
   promo_code?: string | null;
+  /** Chosen add-on ids. The RPC prices them, records a snapshot on the booking,
+   *  and folds in any required option the client left out. */
+  option_ids?: string[];
 }
 
 export interface HeldBooking {
@@ -84,6 +87,7 @@ export interface HoldDeps {
     p_travellers: TravellerInput[];
     p_package_id: string | null;
     p_promo_code: string | null;
+    p_option_ids: string[];
   }) => Promise<RpcResult>;
   /** GET the booking by reference. Null when none exists. Never rejects. */
   probeByReference: (reference: string) => Promise<HeldBooking | null>;
@@ -154,6 +158,7 @@ export async function holdPlaces(deps: HoldDeps, req: HoldRequest): Promise<Hold
         p_travellers: req.travellers,
         p_package_id: req.package_id ?? null,
         p_promo_code: req.promo_code ?? null,
+        p_option_ids: req.option_ids ?? [],
       });
     } catch {
       // AMBIGUOUS. The RPC may have committed before the failure. The reference

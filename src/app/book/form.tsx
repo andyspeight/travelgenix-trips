@@ -10,7 +10,7 @@ import { useFormStatus } from 'react-dom';
 import { createBookingAction, checkPromoAction } from './actions';
 import { EMPTY_STATE } from '@/lib/action-state';
 import { MAX_PARTY } from '@/lib/booking';
-import type { Departure, Package } from '@/lib/types';
+import type { Departure, Package, TripOption } from '@/lib/types';
 
 function money(pence: number | null | undefined, currency: string): string | null {
   if (typeof pence !== 'number' || pence <= 0) return null;
@@ -29,9 +29,9 @@ function Submit() {
 }
 
 export function BookingForm({
-  tripId, departures, packages = [], currency, initialDeparture,
+  tripId, departures, packages = [], options = [], currency, initialDeparture,
 }: {
-  tripId: string; departures: Departure[]; packages?: Package[]; currency: string; initialDeparture?: string;
+  tripId: string; departures: Departure[]; packages?: Package[]; options?: TripOption[]; currency: string; initialDeparture?: string;
 }) {
   const [state, action] = useActionState(createBookingAction, EMPTY_STATE);
   const [promo, setPromo] = useState('');
@@ -50,6 +50,9 @@ export function BookingForm({
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
   const [lead, setLead] = useState({ name: '', email: '', phone: '' });
   const [names, setNames] = useState<string[]>([]);
+  // Optional add-ons the traveller ticks. Required extras are shown as included
+  // and always charged by the server, so they are not tracked here.
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
 
   const e = state.errors;
   const cap = Math.max(1, Math.min(MAX_PARTY, party));
@@ -58,6 +61,17 @@ export function BookingForm({
   function setName(i: number, v: string) {
     setNames((prev) => { const next = prev.slice(); next[i] = v; return next; });
   }
+
+  function toggleOption(id: string) {
+    setChosen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const optional = options.filter((o) => !o.is_required);
+  const required = options.filter((o) => o.is_required);
 
   return (
     <form action={action} noValidate className="bk-form">
@@ -112,6 +126,42 @@ export function BookingForm({
               );
             })}
           </div>
+        </fieldset>
+      )}
+
+      {options.length > 0 && (
+        <fieldset className="bk-field">
+          <legend>Optional extras</legend>
+          <div className="bk-extras">
+            {required.map((o) => {
+              const price = money(o.price_pence, currency);
+              return (
+                <label key={o.id} className="bk-extra bk-extra--req">
+                  <input type="checkbox" checked disabled />
+                  <span className="bk-extra-main">
+                    <span className="bk-extra-name">{o.name} <em>· included</em></span>
+                    {o.description && <span className="bk-extra-desc">{o.description}</span>}
+                  </span>
+                  {price && <span className="bk-extra-price">{price}{o.per === 'traveller' ? ' pp' : ''}</span>}
+                </label>
+              );
+            })}
+            {optional.map((o) => {
+              const price = money(o.price_pence, currency);
+              return (
+                <label key={o.id} className="bk-extra">
+                  <input type="checkbox" name="option_id" value={o.id}
+                    checked={chosen.has(o.id)} onChange={() => toggleOption(o.id)} />
+                  <span className="bk-extra-main">
+                    <span className="bk-extra-name">{o.name}</span>
+                    {o.description && <span className="bk-extra-desc">{o.description}</span>}
+                  </span>
+                  {price && <span className="bk-extra-price">{price}{o.per === 'traveller' ? ' pp' : ''}</span>}
+                </label>
+              );
+            })}
+          </div>
+          <p className="bk-hint">Extras are added to your total. No card is charged now.</p>
         </fieldset>
       )}
 

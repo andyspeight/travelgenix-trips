@@ -20,7 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireOperator } from '@/lib/auth';
-import { validateTrip, validateDeparture, validatePackage, validatePromo, isValidTripStatus } from '@/lib/validate';
+import { validateTrip, validateDeparture, validatePackage, validateOption, validatePromo, isValidTripStatus } from '@/lib/validate';
 import { sanitiseTripContent } from '@/lib/content';
 import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
 import { normaliseReference } from '@/lib/booking';
@@ -42,6 +42,9 @@ import {
   createPackage,
   updatePackage,
   removePackage,
+  createOption,
+  updateOption,
+  removeOption,
   bulkSetBookingStatus,
   setWaitlistStatus,
   sendTripBroadcast,
@@ -187,6 +190,44 @@ export async function removePackageAction(form: FormData): Promise<void> {
   // A package with bookings against it is kept, not deleted, so the record of
   // what a traveller booked survives. The console reflects that it stayed.
   await removePackage(packageId, tripId, ctx.operatorId);
+  revalidatePath(`/console/trips/${tripId}`);
+}
+
+// ---------------------------------------------------------------------------
+//  Options — priced add-ons and extras (phase 5).
+// ---------------------------------------------------------------------------
+
+export async function saveOptionAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const raw = fields(form);
+  const tripId = String(raw.trip_id || '');
+  const optionId = String(raw.id || '');
+
+  const { ok, errors, value } = validateOption(raw);
+  if (!ok) return fail(errors, 'Check the highlighted fields.');
+
+  const saved = optionId
+    ? await updateOption(optionId, tripId, ctx.operatorId, value)
+    : await createOption(tripId, ctx.operatorId, value);
+
+  if (!saved) return fail({}, 'That trip could not be found.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  return { ok: true, errors: {}, message: optionId ? 'Saved.' : 'Extra added.' };
+}
+
+export async function removeOptionAction(form: FormData): Promise<void> {
+  const ctx = await requireOperator();
+  if (!ctx) return;
+
+  const tripId = String(form.get('trip_id') || '');
+  const optionId = String(form.get('id') || '');
+
+  // Bookings keep their own snapshot of the extras they chose, so removing an
+  // option here never erases what a traveller booked.
+  await removeOption(optionId, tripId, ctx.operatorId);
   revalidatePath(`/console/trips/${tripId}`);
 }
 

@@ -216,8 +216,51 @@ test('ambiguous failure with an UNKNOWN probe does NOT retry the RPC', async () 
 });
 
 test('every reason has a human message', () => {
-  for (const r of ['sold_out', 'insufficient_capacity', 'departure_closed', 'not_found', 'invalid', 'busy', 'error'] as const) {
+  for (const r of ['sold_out', 'insufficient_capacity', 'departure_closed', 'not_found', 'invalid', 'busy', 'too_many_holds', 'package_full', 'error'] as const) {
     const m = holdMessage(r, 2);
     assert.ok(m.length > 10 && !m.includes('undefined'), r);
   }
+});
+
+test('package_full is terminal, no retry', async () => {
+  const h = deps([{ ok: false, reason: 'package_full' }]);
+  const out = await holdPlaces(h.deps, REQ);
+  assert.deepEqual(out, { ok: false, reason: 'package_full' });
+  assert.equal(h.calls, 1);
+});
+
+test('package, promo and add-ons are passed through to the RPC', async () => {
+  let seen: Record<string, unknown> | null = null;
+  const d: HoldDeps = {
+    callRpc: async (args) => { seen = args; return { ok: true, id: 'bk-9', reference: args.p_reference }; },
+    probeByReference: async () => null,
+    mintReference: () => 'TGT-REF1-0000',
+    sleep: async () => {},
+    jitter: () => 0.5,
+  };
+  const out = await holdPlaces(d, {
+    ...REQ,
+    package_id: '3d9923ed-5a68-4da7-a0a7-fc1f5d131669',
+    promo_code: 'EARLYBIRD',
+    option_ids: ['11111111-1111-4111-8111-111111111111'],
+  });
+  assert.equal(out.ok, true);
+  assert.equal(seen!.p_package_id, '3d9923ed-5a68-4da7-a0a7-fc1f5d131669');
+  assert.equal(seen!.p_promo_code, 'EARLYBIRD');
+  assert.deepEqual(seen!.p_option_ids, ['11111111-1111-4111-8111-111111111111']);
+});
+
+test('absent package, promo and add-ons become null / empty at the RPC boundary', async () => {
+  let seen: Record<string, unknown> | null = null;
+  const d: HoldDeps = {
+    callRpc: async (args) => { seen = args; return { ok: true, id: 'bk-10', reference: args.p_reference }; },
+    probeByReference: async () => null,
+    mintReference: () => 'TGT-REF1-0000',
+    sleep: async () => {},
+    jitter: () => 0.5,
+  };
+  await holdPlaces(d, REQ);
+  assert.equal(seen!.p_package_id, null);
+  assert.equal(seen!.p_promo_code, null);
+  assert.deepEqual(seen!.p_option_ids, []);
 });

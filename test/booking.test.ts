@@ -126,3 +126,21 @@ test('a well-formed package id passes through; junk and absence become null', ()
   assert.equal(validateBooking({ ...good, package_id: 'not-a-uuid' }).value.package_id, null);
   assert.equal(validateBooking(good).value.package_id, null, 'absent means null');
 });
+
+const OPT_A = '11111111-1111-4111-8111-111111111111';
+const OPT_B = '22222222-2222-4222-8222-222222222222';
+
+test('chosen add-on ids are kept, junk dropped, order preserved', () => {
+  const r = validateBooking({ ...good, option_id: [OPT_A, 'not-a-uuid', OPT_B] });
+  assert.deepEqual(r.value.option_ids, [OPT_A, OPT_B]);
+});
+
+test('a single add-on (not an array) is handled, and absence is an empty list', () => {
+  assert.deepEqual(validateBooking({ ...good, option_id: OPT_A }).value.option_ids, [OPT_A]);
+  assert.deepEqual(validateBooking(good).value.option_ids, []);
+});
+
+test('duplicate add-on ids are collapsed', () => {
+  const r = validateBooking({ ...good, option_id: [OPT_A, OPT_A, OPT_B] });
+  assert.deepEqual(r.value.option_ids, [OPT_A, OPT_B]);
+});

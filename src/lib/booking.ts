@@ -111,6 +111,10 @@ export interface BookingInput {
   /** A promo code the traveller entered, or null. Only shaped here; the database
    *  function is the authority on whether it applies. */
   promo_code: string | null;
+  /** Chosen add-on ids. Only well-formed uuids survive, deduped and clamped; the
+   *  database function verifies each belongs to the trip and folds in any that
+   *  are required, so a client that omits a required one is still charged it. */
+  option_ids: string[];
 }
 
 /** A pragmatic email check: exactly one @, something either side, a dot in the
@@ -154,6 +158,17 @@ export function validateBooking(raw: Record<string, unknown>): {
   // decides whether it is real, in date and unspent.
   const promoRaw = text(raw.promo_code).toUpperCase().slice(0, 40);
   const promo_code = promoRaw || null;
+
+  // Add-ons arrive as repeated option_id fields. Keep only well-formed uuids,
+  // dedupe, and clamp: a booking cannot pick more distinct extras than a trip
+  // could plausibly carry, and the database function has the final say on which
+  // belong to the trip.
+  const optionRaw = Array.isArray(raw.option_id)
+    ? (raw.option_id as unknown[])
+    : raw.option_id != null ? [raw.option_id] : [];
+  const option_ids = Array.from(
+    new Set(optionRaw.map((v) => text(v)).filter((v) => isUuid(v))),
+  ).slice(0, 40);
 
   const partyRaw = text(raw.party_size) || '1';
   const party_size = Number.parseInt(partyRaw, 10);
@@ -211,6 +226,7 @@ export function validateBooking(raw: Record<string, unknown>): {
       travellers,
       package_id,
       promo_code,
+      option_ids,
     },
   };
 }

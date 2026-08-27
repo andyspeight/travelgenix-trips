@@ -354,6 +354,57 @@ export function validatePromo(raw: Record<string, unknown>): Validated<PromoInpu
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Options — priced add-ons and extras (phase 5). Capacity is deliberately not
+//  taken here: the hold does not cap options yet, so offering the control would
+//  promise a limit we do not enforce.
+// ---------------------------------------------------------------------------
+
+export interface OptionInput {
+  name: string;
+  description: string | null;
+  price_pence: number | null;
+  per: 'traveller' | 'booking';
+  is_required: boolean;
+  sort_order: number;
+}
+
+export function validateOption(raw: Record<string, unknown>): Validated<OptionInput> {
+  const errors: FieldErrors = {};
+
+  const name = text(raw.name);
+  if (!name) errors.name = 'Give the extra a name.';
+  else if (name.length > 160) errors.name = 'Keep the name under 160 characters.';
+
+  const description = text(raw.description);
+  if (description.length > 2000) errors.description = 'Keep the description shorter.';
+
+  // Same "blank means not priced" rule as a package, and the same per-person
+  // ceiling so amount x party stays inside the int4 pence column.
+  const PRICE_CEILING = 50_000_000; // £500,000 in pence
+  const price = raw.price_pence === '' || raw.price_pence == null ? null : toPence(raw.price_pence as string);
+  if (raw.price_pence && price === null) errors.price_pence = 'That price is not a number.';
+  if (price !== null && price > PRICE_CEILING) errors.price_pence = 'That price looks too high. Check it.';
+
+  const per = text(raw.per) === 'booking' ? 'booking' : 'traveller';
+
+  const sortRaw = text(raw.sort_order) || '0';
+  const sort = Number.parseInt(sortRaw, 10);
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      name,
+      description: description || null,
+      price_pence: price,
+      per,
+      is_required: text(raw.is_required) === 'on',
+      sort_order: Number.isFinite(sort) ? sort : 0,
+    },
+  };
+}
+
 export function validatePackage(raw: Record<string, unknown>): Validated<PackageInput> {
   const errors: FieldErrors = {};
 

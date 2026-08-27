@@ -137,6 +137,36 @@ export interface Package {
   sort_order: number;
 }
 
+/** Whether an add-on is charged once for the whole booking (a private transfer)
+ *  or once for each traveller on it (an excursion, a meal plan). */
+export type OptionPer = 'traveller' | 'booking';
+
+/** A priced extra a traveller can add at checkout. `is_required` ones are always
+ *  charged; the rest are opt-in. Capacity exists on the row but is not enforced
+ *  by the hold yet, so it is not offered in the authoring UI. */
+export interface TripOption {
+  id: string;
+  trip_id: string;
+  name: string;
+  description: string | null;
+  price_pence: number | null;
+  per: OptionPer;
+  is_required: boolean;
+  capacity: number | null;
+  sort_order: number;
+}
+
+/** What the hold snapshots onto a booking's selected_options: the extras chosen,
+ *  frozen at their price and name so a later edit never rewrites the record. */
+export interface SelectedOption {
+  option_id: string;
+  name: string;
+  per: OptionPer;
+  unit_pence: number;
+  quantity: number;
+  amount_pence: number;
+}
+
 // ---------------------------------------------------------------------------
 //  Phase 4 — the people. Travellers, custom registration forms, and waivers.
 // ---------------------------------------------------------------------------

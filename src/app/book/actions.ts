@@ -28,11 +28,15 @@ import { sendTravellerConfirmation, sendOperatorNotice } from '@/lib/notify';
 // exactly the hazard action-state.ts already documents for the console). fail
 // and the ActionState type are imported above.
 
+// traveller_name and option_id can each appear many times (one per traveller,
+// one per ticked extra), so they collect into arrays; everything else is scalar.
+const MULTI = new Set(['traveller_name', 'option_id']);
+
 function fields(form: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of form.entries()) {
     if (typeof v !== 'string') continue;
-    if (k === 'traveller_name') {
+    if (MULTI.has(k)) {
       (out[k] ??= []) as string[];
       (out[k] as string[]).push(v);
     } else {
@@ -59,6 +63,7 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
     travellers: value.travellers,
     package_id: value.package_id,
     promo_code: value.promo_code,
+    option_ids: value.option_ids,
   });
 
   if (!outcome.ok) {

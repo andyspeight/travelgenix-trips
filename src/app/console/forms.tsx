@@ -5,9 +5,9 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveTripAction, saveDepartureAction, savePackageAction, savePromoAction } from './actions';
+import { saveTripAction, saveDepartureAction, savePackageAction, saveOptionAction, savePromoAction } from './actions';
 import { EMPTY_STATE, type ActionState } from '@/lib/action-state';
-import type { Trip, Departure, Package } from '@/lib/types';
+import type { Trip, Departure, Package, TripOption } from '@/lib/types';
 import { MediaField } from './media-picker';
 
 function Submit({ label, busy }: { label: string; busy: string }) {
@@ -225,6 +225,53 @@ export function PackageForm({ tripId, pkg }: { tripId: string; pkg?: Package }) 
 
       <div className="c-actions">
         <Submit label={pkg ? 'Save package' : 'Add package'} busy="Saving..." />
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export function OptionForm({ tripId, option }: { tripId: string; option?: TripOption }) {
+  const [state, action] = useActionState(saveOptionAction, EMPTY_STATE);
+  const e = state.errors;
+
+  return (
+    <form action={action} noValidate>
+      <Notice state={state} />
+      <input type="hidden" name="trip_id" value={tripId} />
+      {option && <input type="hidden" name="id" value={option.id} />}
+
+      <div className="c-row">
+        <Field name="name" label="Name" error={e.name}>
+          <input id="name" name="name" defaultValue={option?.name ?? ''} placeholder="Airport transfer" maxLength={160} required />
+        </Field>
+        <Field name="price_pence" label="Price" hint="Blank means no charge." error={e.price_pence}>
+          <input id="price_pence" name="price_pence" inputMode="decimal" defaultValue={pounds(option?.price_pence)} />
+        </Field>
+        <Field name="per" label="Charged" error={e.per}>
+          <select id="per" name="per" defaultValue={option?.per ?? 'traveller'}>
+            <option value="traveller">Per traveller</option>
+            <option value="booking">Per booking</option>
+          </select>
+        </Field>
+      </div>
+
+      <Field name="description" label="Description" error={e.description}>
+        <textarea id="description" name="description" defaultValue={option?.description ?? ''} maxLength={2000} />
+      </Field>
+
+      <label className="ce-check">
+        <input type="checkbox" name="is_required" defaultChecked={option?.is_required ?? false} />
+        {' '}Everyone must take this, so it is added to every booking
+      </label>
+
+      <Field name="sort_order" label="Order" hint="Lower shows first." error={e.sort_order}>
+        <input id="sort_order" name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} />
+      </Field>
+
+      <div className="c-actions">
+        <Submit label={option ? 'Save extra' : 'Add extra'} busy="Saving..." />
       </div>
     </form>
   );

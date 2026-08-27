@@ -4,13 +4,13 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, listPromoCodes, describePromo } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, getOptionsForTrip, listPromoCodes, describePromo } from '@/lib/repo';
 import { format as money } from '@/lib/money';
-import { TripForm, DepartureForm, PackageForm, PromoForm } from '../../forms';
+import { TripForm, DepartureForm, PackageForm, OptionForm, PromoForm } from '../../forms';
 import { ContentEditor } from '../../content-editor';
 import { RegistrationEditor } from '../../registration-editor';
 import { SignInPrompt, NoOperator } from '../../states';
-import { setTripStatusAction, removeDepartureAction, removePackageAction, removePromoAction } from '../../actions';
+import { setTripStatusAction, removeDepartureAction, removePackageAction, removeOptionAction, removePromoAction } from '../../actions';
 import type { Departure, Package } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -33,10 +33,11 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   const openCount = departures.filter((d) => d.status === 'open').length;
   const publicUrl = `/trip/${operator.slug}/${trip.slug}`;
 
-  const [regForm, waiver, packages, promos] = await Promise.all([
+  const [regForm, waiver, packages, options, promos] = await Promise.all([
     getFormForTrip(trip.id, operator.id),
     getWaiverForTrip(trip.id, operator.id),
     getPackagesForTrip(trip.id, operator.id),
+    getOptionsForTrip(trip.id, operator.id),
     listPromoCodes(trip.id, operator.id),
   ]);
 
@@ -138,6 +139,30 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
 
       <h2 style={{ fontSize: '1rem' }}>Add a package</h2>
       <PackageForm tripId={trip.id} />
+
+      <h2>Optional extras</h2>
+      <p className="c-sub" style={{ marginTop: '-6px' }}>
+        Priced add-ons a traveller can choose at checkout: a transfer, an excursion,
+        a meal plan. Charge each once per booking or once per traveller. Mark one
+        required to add it to every booking.
+      </p>
+      {options.length === 0 ? (
+        <p className="c-empty">No extras yet. A trip sells fine without them.</p>
+      ) : (
+        options.map((o) => (
+          <div key={o.id} className="ce-section">
+            <OptionForm tripId={trip.id} option={o} />
+            <form action={removeOptionAction} style={{ marginTop: 8 }}>
+              <input type="hidden" name="trip_id" value={trip.id} />
+              <input type="hidden" name="id" value={o.id} />
+              <button className="c-btn c-btn--quiet" type="submit">Remove this extra</button>
+            </form>
+          </div>
+        ))
+      )}
+
+      <h2 style={{ fontSize: '1rem' }}>Add an extra</h2>
+      <OptionForm tripId={trip.id} />
 
       <h2>Promo codes</h2>
       <p className="c-sub" style={{ marginTop: '-6px' }}>
