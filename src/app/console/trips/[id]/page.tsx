@@ -7,6 +7,7 @@ import { getSession } from '@/lib/auth';
 import { ensureOperator, getTripOwned, listDepartures } from '@/lib/repo';
 import { format as money } from '@/lib/money';
 import { TripForm, DepartureForm } from '../../forms';
+import { ContentEditor } from '../../content-editor';
 import { SignInPrompt, NoOperator } from '../../states';
 import { setTripStatusAction, removeDepartureAction } from '../../actions';
 import type { Departure } from '@/lib/types';
@@ -71,6 +72,13 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
 
       <h2>Details</h2>
       <TripForm trip={trip} />
+
+      <h2>Itinerary and content</h2>
+      <p className="c-sub" style={{ marginTop: '-6px' }}>
+        Everything the public page shows beyond the basics: highlights, the day by
+        day, what is included, extras and the gallery.
+      </p>
+      <ContentEditor tripId={trip.id} content={trip.content ?? {}} />
 
       <h2>Departures</h2>
       {departures.length === 0 ? (

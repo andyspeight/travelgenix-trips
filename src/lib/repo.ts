@@ -135,6 +135,20 @@ export async function updateTrip(
   return rows[0] ?? null;
 }
 
+export async function updateTripContent(
+  tripId: string,
+  operatorId: string,
+  content: unknown,
+): Promise<Trip | null> {
+  if (!isUuid(tripId)) return null;
+  const rows = await sbUpdate<Trip>(
+    'gt_trips',
+    `id=eq.${tripId}&operator_id=eq.${operatorId}`,
+    { content, updated_at: nowIso() },
+  );
+  return rows[0] ?? null;
+}
+
 export async function setTripStatus(
   tripId: string,
   operatorId: string,

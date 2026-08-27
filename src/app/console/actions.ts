@@ -20,6 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireOperator } from '@/lib/auth';
 import { validateTrip, validateDeparture, isValidTripStatus } from '@/lib/validate';
+import { sanitiseTripContent } from '@/lib/content';
 import { fail, type ActionState } from '@/lib/action-state';
 import {
   createTrip,
@@ -30,6 +31,7 @@ import {
   removeDeparture,
   getTripOwned,
   listOpenDepartures,
+  updateTripContent,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -130,4 +132,32 @@ export async function removeDepartureAction(form: FormData): Promise<void> {
 
   await removeDeparture(departureId, tripId, ctx.operatorId);
   revalidatePath(`/console/trips/${tripId}`);
+}
+
+// ---------------------------------------------------------------------------
+
+export async function saveTripContentAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const tripId = String(form.get('id') || '');
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(form.get('content') || '{}'));
+  } catch {
+    return fail({}, 'The content could not be read. Please try again.');
+  }
+
+  // The sanitiser is the authority: it clamps text, validates image URLs and
+  // converts prices, so nothing an operator types reaches the public page raw.
+  const content = sanitiseTripContent(parsed);
+
+  const saved = await updateTripContent(tripId, ctx.operatorId, content);
+  if (!saved) return fail({}, 'That trip could not be found.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  // The public trip page revalidates on its own 60s cycle, so the change shows
+  // there within a minute without needing its operator+slug path here.
+  return { ok: true, errors: {}, message: 'Content saved.' };
 }
