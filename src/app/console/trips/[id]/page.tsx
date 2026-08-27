@@ -4,10 +4,11 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listDepartures } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip } from '@/lib/repo';
 import { format as money } from '@/lib/money';
 import { TripForm, DepartureForm } from '../../forms';
 import { ContentEditor } from '../../content-editor';
+import { RegistrationEditor } from '../../registration-editor';
 import { SignInPrompt, NoOperator } from '../../states';
 import { setTripStatusAction, removeDepartureAction } from '../../actions';
 import type { Departure } from '@/lib/types';
@@ -31,6 +32,11 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   const departures = await listDepartures(trip.id);
   const openCount = departures.filter((d) => d.status === 'open').length;
   const publicUrl = `/trip/${operator.slug}/${trip.slug}`;
+
+  const [regForm, waiver] = await Promise.all([
+    getFormForTrip(trip.id, operator.id),
+    getWaiverForTrip(trip.id, operator.id),
+  ]);
 
   return (
     <>
@@ -85,6 +91,13 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
         day, what is included, extras and the gallery.
       </p>
       <ContentEditor tripId={trip.id} content={trip.content ?? {}} />
+
+      <h2>Registration</h2>
+      <p className="c-sub" style={{ marginTop: '-6px' }}>
+        What each traveller gives you after they book: their details, any custom questions,
+        and the agreement they sign.
+      </p>
+      <RegistrationEditor tripId={trip.id} form={regForm} waiver={waiver} />
 
       <h2>Departures</h2>
       {departures.length === 0 ? (
