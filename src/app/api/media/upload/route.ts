@@ -14,7 +14,6 @@
 
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { requireOperator } from '@/lib/auth';
-import { recordMedia } from '@/lib/repo';
 
 export const runtime = 'nodejs';
 
@@ -41,23 +40,18 @@ export async function POST(request: Request): Promise<Response> {
     const result = await handleUpload({
       body,
       request,
+      // NO onUploadCompleted. It is a server-to-server callback from Vercel Blob
+      // to this route, and the browser upload() WAITS for it to complete. Our
+      // .vercel.app deployment sits behind Vercel Authentication, which answers
+      // that callback with a 401, so the upload would hang at "Uploading..."
+      // forever. The browser records the blob itself by POSTing to /api/media
+      // once the upload resolves, which needs no inbound callback.
       onBeforeGenerateToken: async () => ({
         allowedContentTypes: ALLOWED,
         maximumSizeInBytes: MAX_BYTES,
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ operatorId: ctx.operatorId }),
       }),
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        try {
-          const { operatorId } = JSON.parse(tokenPayload || '{}');
-          if (operatorId) {
-            const kind = (blob.contentType || '').startsWith('video') ? 'video' : 'image';
-            await recordMedia(operatorId, { url: blob.url, kind, content_type: blob.contentType });
-          }
-        } catch {
-          // The client's own POST to /api/media is the reliable record path.
-        }
-      },
     });
     return Response.json(result);
   } catch (err) {
