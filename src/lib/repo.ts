@@ -451,6 +451,9 @@ export interface MediaItem {
   filename: string | null;
   content_type: string | null;
   size_bytes: number | null;
+  source: 'upload' | 'pexels';
+  credit: string | null;
+  credit_url: string | null;
   created_at: string;
 }
 
@@ -466,7 +469,11 @@ export async function listMedia(operatorId: string, limit = 200): Promise<MediaI
  *  from a flaky client cannot create two rows for one file. */
 export async function recordMedia(
   operatorId: string,
-  item: { url: string; kind: 'image' | 'video'; filename?: string | null; content_type?: string | null; size_bytes?: number | null },
+  item: {
+    url: string; kind: 'image' | 'video';
+    filename?: string | null; content_type?: string | null; size_bytes?: number | null;
+    source?: 'upload' | 'pexels'; credit?: string | null; credit_url?: string | null;
+  },
 ): Promise<MediaItem | null> {
   const rows = await sbRequest<MediaItem[]>('gt_media?on_conflict=operator_id,url', {
     method: 'POST',
@@ -477,6 +484,9 @@ export async function recordMedia(
       filename: item.filename ?? null,
       content_type: item.content_type ?? null,
       size_bytes: item.size_bytes ?? null,
+      source: item.source ?? 'upload',
+      credit: item.credit ?? null,
+      credit_url: item.credit_url ?? null,
     },
     headers: { Prefer: 'return=representation,resolution=merge-duplicates' },
   }).catch(() => null);
