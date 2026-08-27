@@ -19,15 +19,12 @@ import { validateBooking } from '@/lib/booking';
 import { takeHold, getConfirmation } from '@/lib/repo';
 import { holdMessage } from '@/lib/hold';
 import { sendTravellerConfirmation } from '@/lib/notify';
-import type { FieldErrors } from '@/lib/action-state';
-
-export interface BookingState {
-  ok: boolean;
-  errors: FieldErrors;
-  message: string;
-}
-
-export const EMPTY_BOOKING_STATE: BookingState = { ok: true, errors: {}, message: '' };
+// A 'use server' module may export ONLY async functions. The state shape and its
+// empty value therefore live in action-state.ts, not here: a plain const or
+// interface exported from this file does not survive the client boundary, and a
+// client reading its `.errors` gets undefined (the /book 500 fixed 27 Aug 2026,
+// exactly the hazard action-state.ts already documents for the console).
+import type { ActionState } from '@/lib/action-state';
 
 function fields(form: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -43,7 +40,7 @@ function fields(form: FormData): Record<string, unknown> {
   return out;
 }
 
-export async function createBookingAction(_prev: BookingState, form: FormData): Promise<BookingState> {
+export async function createBookingAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const raw = fields(form);
 
   const { ok, errors, value } = validateBooking(raw);

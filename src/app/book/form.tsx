@@ -7,7 +7,8 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { createBookingAction, EMPTY_BOOKING_STATE } from './actions';
+import { createBookingAction } from './actions';
+import { EMPTY_STATE } from '@/lib/action-state';
 import { MAX_PARTY } from '@/lib/booking';
 import type { Departure, Package } from '@/lib/types';
 
@@ -32,7 +33,7 @@ export function BookingForm({
 }: {
   departures: Departure[]; packages?: Package[]; currency: string; initialDeparture?: string;
 }) {
-  const [state, action] = useActionState(createBookingAction, EMPTY_BOOKING_STATE);
+  const [state, action] = useActionState(createBookingAction, EMPTY_STATE);
 
   // A stale ?departure that is not among the bookable dates falls back to the
   // first one, so the form is never submitted with nothing selected.
