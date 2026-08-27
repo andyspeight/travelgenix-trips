@@ -65,6 +65,7 @@ export type HoldReason =
   | 'invalid'
   | 'busy'            // gate stayed jammed after every retry
   | 'too_many_holds'  // this email already holds the per-departure maximum
+  | 'package_full'    // the chosen room option has hit its own allocation
   | 'error';          // an unexpected or unrecoverable failure
 
 export type HoldOutcome =
@@ -113,6 +114,7 @@ const TERMINAL: Record<string, HoldReason> = {
   not_found: 'not_found',
   invalid: 'invalid',
   too_many_holds: 'too_many_holds',
+  package_full: 'package_full',
 };
 
 /**
@@ -236,6 +238,8 @@ export function holdMessage(reason: HoldReason, remaining?: number): string {
       return 'A lot of people are booking this trip right now. Please try again in a moment.';
     case 'too_many_holds':
       return 'You already have several places held on this departure. Please complete or cancel those before holding more.';
+    case 'package_full':
+      return 'That room option has just filled up. Please choose another room, or another date.';
     default:
       return 'Something went wrong holding your place. Please try again.';
   }
