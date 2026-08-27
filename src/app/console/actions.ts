@@ -20,7 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireOperator } from '@/lib/auth';
-import { validateTrip, validateDeparture, isValidTripStatus } from '@/lib/validate';
+import { validateTrip, validateDeparture, validatePackage, isValidTripStatus } from '@/lib/validate';
 import { sanitiseTripContent } from '@/lib/content';
 import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
 import { normaliseReference } from '@/lib/booking';
@@ -39,6 +39,9 @@ import {
   saveWaiver,
   getRegistrationContext,
   writeRegistration,
+  createPackage,
+  updatePackage,
+  removePackage,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -138,6 +141,44 @@ export async function removeDepartureAction(form: FormData): Promise<void> {
   const departureId = String(form.get('id') || '');
 
   await removeDeparture(departureId, tripId, ctx.operatorId);
+  revalidatePath(`/console/trips/${tripId}`);
+}
+
+// ---------------------------------------------------------------------------
+//  Packages — room types and occupancy tiers (phase 5).
+// ---------------------------------------------------------------------------
+
+export async function savePackageAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOperator();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const raw = fields(form);
+  const tripId = String(raw.trip_id || '');
+  const packageId = String(raw.id || '');
+
+  const { ok, errors, value } = validatePackage(raw);
+  if (!ok) return fail(errors, 'Check the highlighted fields.');
+
+  const saved = packageId
+    ? await updatePackage(packageId, tripId, ctx.operatorId, value)
+    : await createPackage(tripId, ctx.operatorId, value);
+
+  if (!saved) return fail({}, 'That trip could not be found.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  return { ok: true, errors: {}, message: packageId ? 'Saved.' : 'Package added.' };
+}
+
+export async function removePackageAction(form: FormData): Promise<void> {
+  const ctx = await requireOperator();
+  if (!ctx) return;
+
+  const tripId = String(form.get('trip_id') || '');
+  const packageId = String(form.get('id') || '');
+
+  // A package with bookings against it is kept, not deleted, so the record of
+  // what a traveller booked survives. The console reflects that it stayed.
+  await removePackage(packageId, tripId, ctx.operatorId);
   revalidatePath(`/console/trips/${tripId}`);
 }
 

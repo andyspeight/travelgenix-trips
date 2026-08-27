@@ -119,3 +119,10 @@ test('a single additional traveller (not an array) is handled', () => {
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.equal(r.value.travellers.length, 2);
 });
+
+test('a well-formed package id passes through; junk and absence become null', () => {
+  const pkg = '3d9923ed-5a68-4da7-a0a7-fc1f5d131669';
+  assert.equal(validateBooking({ ...good, package_id: pkg }).value.package_id, pkg);
+  assert.equal(validateBooking({ ...good, package_id: 'not-a-uuid' }).value.package_id, null);
+  assert.equal(validateBooking(good).value.package_id, null, 'absent means null');
+});

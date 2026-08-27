@@ -42,6 +42,9 @@ export interface HoldRequest {
   lead_email: string;
   lead_phone: string | null;
   travellers: TravellerInput[];
+  /** Chosen package (room type), or null/absent. The RPC verifies and prices
+   *  off it; a hold with no package prices off the departure as before. */
+  package_id?: string | null;
 }
 
 export interface HeldBooking {
@@ -75,6 +78,7 @@ export interface HoldDeps {
     p_lead_email: string;
     p_lead_phone: string | null;
     p_travellers: TravellerInput[];
+    p_package_id: string | null;
   }) => Promise<RpcResult>;
   /** GET the booking by reference. Null when none exists. Never rejects. */
   probeByReference: (reference: string) => Promise<HeldBooking | null>;
@@ -142,6 +146,7 @@ export async function holdPlaces(deps: HoldDeps, req: HoldRequest): Promise<Hold
         p_lead_email: req.lead_email,
         p_lead_phone: req.lead_phone,
         p_travellers: req.travellers,
+        p_package_id: req.package_id ?? null,
       });
     } catch {
       // AMBIGUOUS. The RPC may have committed before the failure. The reference

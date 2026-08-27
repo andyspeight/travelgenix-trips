@@ -105,6 +105,9 @@ export interface BookingInput {
   departure_id: string;
   party_size: number;
   travellers: TravellerInput[];
+  /** The chosen package (room type), or null. The database function verifies it
+   *  belongs to the trip and prices off it; here we only shape it. */
+  package_id: string | null;
 }
 
 /** A pragmatic email check: exactly one @, something either side, a dot in the
@@ -138,6 +141,11 @@ export function validateBooking(raw: Record<string, unknown>): {
 
   const departure_id = text(raw.departure_id);
   if (!isUuid(departure_id)) errors.departure_id = 'Choose a departure date.';
+
+  // A package is optional here; only a well-formed id survives, and the database
+  // function is the authority on whether it belongs to the trip.
+  const packageRaw = text(raw.package_id);
+  const package_id = isUuid(packageRaw) ? packageRaw : null;
 
   const partyRaw = text(raw.party_size) || '1';
   const party_size = Number.parseInt(partyRaw, 10);
@@ -193,6 +201,7 @@ export function validateBooking(raw: Record<string, unknown>): {
       departure_id,
       party_size: Number.isFinite(party_size) && party_size >= 1 ? party_size : 1,
       travellers,
+      package_id,
     },
   };
 }

@@ -214,3 +214,72 @@ export function validateDeparture(raw: Record<string, unknown>): Validated<Depar
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+//  Packages — room types and occupancy tiers (phase 5)
+// ---------------------------------------------------------------------------
+
+export interface PackageInput {
+  name: string;
+  description: string | null;
+  price_pence: number | null;
+  occupancy: number;
+  capacity: number | null;
+  image_url: string | null;
+  info_url: string | null;
+  sort_order: number;
+}
+
+export function validatePackage(raw: Record<string, unknown>): Validated<PackageInput> {
+  const errors: FieldErrors = {};
+
+  const name = text(raw.name);
+  if (!name) errors.name = 'Give the package a name.';
+  else if (name.length > 160) errors.name = 'Keep the name under 160 characters.';
+
+  const description = text(raw.description);
+  if (description.length > 2000) errors.description = 'Keep the description shorter.';
+
+  // A price is per person, and the same "blank means price on request, never
+  // zero" rule as a departure. The same per-person ceiling keeps total = price x
+  // party inside the int4 pence column.
+  const PRICE_CEILING = 50_000_000; // £500,000 in pence
+  const price = raw.price_pence === '' || raw.price_pence == null ? null : toPence(raw.price_pence as string);
+  if (raw.price_pence && price === null) errors.price_pence = 'That price is not a number.';
+  if (price !== null && price > PRICE_CEILING) errors.price_pence = 'That price looks too high. Check it.';
+
+  const occRaw = text(raw.occupancy) || '1';
+  const occupancy = Number.parseInt(occRaw, 10);
+  if (!Number.isFinite(occupancy) || occupancy < 1) errors.occupancy = 'Occupancy is one or more.';
+  else if (occupancy > 20) errors.occupancy = 'That occupancy looks wrong. Check it.';
+
+  // Capacity is optional (blank = no cap). It is not enforced by the hold yet;
+  // stored for the allocation slice to come.
+  const capacity = raw.capacity === '' || raw.capacity == null ? null : Number.parseInt(text(raw.capacity), 10);
+  if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) errors.capacity = 'Capacity is zero or more, or blank.';
+  else if (capacity !== null && capacity > 10000) errors.capacity = 'That capacity looks wrong. Check it.';
+
+  const image = text(raw.image_url);
+  if (image && !isSafeHttpUrl(image)) errors.image_url = 'That must be an https image address.';
+
+  const info = text(raw.info_url);
+  if (info && !isSafeHttpUrl(info)) errors.info_url = 'That link must be an https web address.';
+
+  const sortRaw = text(raw.sort_order) || '0';
+  const sort = Number.parseInt(sortRaw, 10);
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      name,
+      description: description || null,
+      price_pence: price,
+      occupancy: Number.isFinite(occupancy) && occupancy >= 1 ? occupancy : 1,
+      capacity: capacity !== null && Number.isFinite(capacity) && capacity >= 0 ? capacity : null,
+      image_url: image || null,
+      info_url: info || null,
+      sort_order: Number.isFinite(sort) ? sort : 0,
+    },
+  };
+}

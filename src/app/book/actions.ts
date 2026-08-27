@@ -58,6 +58,7 @@ export async function createBookingAction(_prev: BookingState, form: FormData): 
     lead_email: lead.email ?? '',
     lead_phone: lead.phone,
     travellers: value.travellers,
+    package_id: value.package_id,
   });
 
   if (!outcome.ok) {

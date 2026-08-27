@@ -18,11 +18,11 @@
 import 'server-only';
 import { sbRequest, sbInsert, sbUpdate } from './supabase.ts';
 import { slugify } from './validate.ts';
-import type { TripInput, DepartureInput } from './validate.ts';
+import type { TripInput, DepartureInput, PackageInput } from './validate.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
-import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField } from './types.ts';
+import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -284,6 +284,74 @@ export async function removeDeparture(
 }
 
 // ---------------------------------------------------------------------------
+//  Packages — room types and occupancy tiers (phase 5). Public to read (they
+//  are shown on the trip page and the booking form); operator-gated to write.
+// ---------------------------------------------------------------------------
+
+export async function listPackages(tripId: string): Promise<Package[]> {
+  if (!isUuid(tripId)) return [];
+  return (
+    (await sbRequest<Package[]>(
+      `gt_packages?trip_id=eq.${tripId}&select=*&order=sort_order.asc,created_at.asc`,
+    )) ?? []
+  );
+}
+
+/** Operator-gated list for the editor: empty for a trip that is not theirs. */
+export async function getPackagesForTrip(tripId: string, operatorId: string): Promise<Package[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return listPackages(tripId);
+}
+
+export async function createPackage(
+  tripId: string,
+  operatorId: string,
+  input: PackageInput,
+): Promise<Package | null> {
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  const rows = await sbInsert<Package>('gt_packages', { ...input, trip_id: tripId });
+  return rows[0] ?? null;
+}
+
+export async function updatePackage(
+  packageId: string,
+  tripId: string,
+  operatorId: string,
+  input: PackageInput,
+): Promise<Package | null> {
+  if (!isUuid(packageId)) return null;
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  const rows = await sbUpdate<Package>(
+    'gt_packages',
+    `id=eq.${packageId}&trip_id=eq.${tripId}`,
+    { ...input, updated_at: nowIso() },
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Remove a package. If any booking chose it, we do NOT delete: that would erase
+ * the record of what a real traveller booked. It is refused as 'in_use' so the
+ * operator can see why. Only an unused package is actually deleted.
+ */
+export async function removePackage(
+  packageId: string,
+  tripId: string,
+  operatorId: string,
+): Promise<'deleted' | 'in_use' | null> {
+  if (!isUuid(packageId)) return null;
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+
+  const used = await sbRequest<Array<{ id: string }>>(
+    `gt_bookings?package_id=eq.${packageId}&select=id&limit=1`,
+  ).catch(() => null);
+  if (used?.length) return 'in_use';
+
+  await sbRequest(`gt_packages?id=eq.${packageId}&trip_id=eq.${tripId}`, { method: 'DELETE' });
+  return 'deleted';
+}
+
+// ---------------------------------------------------------------------------
 //  Bookings — the read side (the console). Ownership is on operator_id, and
 //  traveller PII only ever leaves through these operator-gated reads.
 // ---------------------------------------------------------------------------
@@ -298,6 +366,7 @@ export interface BookingRow {
   balance_pence: number | null;
   currency: string;
   departure_id: string | null;
+  package_id: string | null;
   hold_expires_at: string | null;
   created_at: string;
   traveller_name: string | null;
@@ -421,13 +490,14 @@ export interface Confirmation {
   operator_name: string;
   starts_on: string | null;
   ends_on: string | null;
+  package_name: string | null;
 }
 
 export async function getConfirmation(reference: string): Promise<Confirmation | null> {
   const rows = await sbRequest<Array<Record<string, unknown>>>(
     `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
       `&select=reference,status,party_size,total_pence,deposit_pence,currency,hold_expires_at,` +
-      `traveller_name,traveller_email,` +
+      `traveller_name,traveller_email,package:gt_packages(name),` +
       `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
   ).catch(() => null);
 
@@ -437,6 +507,7 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
   const dep = (r.departure ?? {}) as Record<string, unknown>;
   const trip = (dep.trip ?? {}) as Record<string, unknown>;
   const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const pkg = (r.package ?? null) as Record<string, unknown> | null;
 
   return {
     reference: String(r.reference),
@@ -452,6 +523,7 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
     operator_name: String(op.name ?? 'the operator'),
     starts_on: (dep.starts_on as string) ?? null,
     ends_on: (dep.ends_on as string) ?? null,
+    package_name: pkg?.name ? String(pkg.name) : null,
   };
 }
 
@@ -736,6 +808,7 @@ export interface BookingDetail {
   responses: Array<{ traveller_id: string | null; answers: Record<string, string> }>;
   signatures: Array<{ traveller_id: string | null; signed_name: string; signed_at: string; version: number }>;
   trip: { id: string; title: string } | null;
+  packageName: string | null;
   registrationComplete: boolean;
 }
 
@@ -756,6 +829,14 @@ export async function getBookingDetail(bookingId: string, operatorId: string): P
 
   const form = trip ? await formByTrip(trip.id) : null;
   const waiver = trip ? await waiverByTrip(trip.id) : null;
+
+  let packageName: string | null = null;
+  if (booking.package_id) {
+    const pk = await sbRequest<Array<{ name: string }>>(
+      `gt_packages?id=eq.${booking.package_id}&select=name&limit=1`,
+    ).catch(() => null);
+    if (pk?.[0]?.name) packageName = String(pk[0].name);
+  }
 
   const responses = form
     ? (await sbRequest<Array<{ traveller_id: string | null; answers: Record<string, string> }>>(
@@ -791,7 +872,7 @@ export async function getBookingDetail(bookingId: string, operatorId: string): P
   return {
     booking, form, waiver, responses,
     signatures: signatures.map((s) => ({ ...s, version: waiver?.version ?? 1 })),
-    trip, registrationComplete,
+    trip, packageName, registrationComplete,
   };
 }
 

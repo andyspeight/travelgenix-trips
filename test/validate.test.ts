@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  slugify, isUsableSlug, isSafeHttpUrl, isRealDate, validateTrip, validateDeparture,
+  slugify, isUsableSlug, isSafeHttpUrl, isRealDate, validateTrip, validateDeparture, validatePackage,
 } from '../src/lib/validate.ts';
 
 // --------------------------------------------------------------------------
@@ -214,4 +214,35 @@ test('a price beyond the sane ceiling is rejected (overflow guard)', () => {
 
 test('an unknown status is rejected, not defaulted', () => {
   assert.equal(validateDeparture({ ...goodDep, status: 'nearly' }).ok, false);
+});
+
+// --------------------------------------------------------------------------
+//  Packages — room types (phase 5)
+// --------------------------------------------------------------------------
+
+test('a package converts price to pence and defaults occupancy', () => {
+  const r = validatePackage({ name: 'Twin share', price_pence: '3700', info_url: 'https://hotel.example.com/room' });
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(r.value.price_pence, 370000);
+  assert.equal(r.value.occupancy, 1, 'occupancy defaults to 1');
+  assert.equal(r.value.capacity, null, 'blank capacity is null, not zero');
+});
+
+test('a package needs a name', () => {
+  assert.ok(validatePackage({ name: '  ' }).errors.name);
+});
+
+test('a package rejects an unsafe image or info link', () => {
+  assert.ok(validatePackage({ name: 'Suite', image_url: 'javascript:alert(1)' }).errors.image_url);
+  assert.ok(validatePackage({ name: 'Suite', info_url: 'http://insecure/room' }).errors.info_url);
+});
+
+test('a package price beyond the ceiling is rejected', () => {
+  assert.ok(validatePackage({ name: 'Gold', price_pence: '600000' }).errors.price_pence);
+});
+
+test('an empty package price means "on request", not zero', () => {
+  const r = validatePackage({ name: 'Standard', price_pence: '' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.price_pence, null);
 });
