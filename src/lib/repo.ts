@@ -38,6 +38,12 @@ const nowIso = () => new Date().toISOString();
  * must land on the same operator.
  */
 export async function ensureOperator(session: Session): Promise<Operator | null> {
+  // Preview review mode acts as the first operator, so the console shows real
+  // content without a real sign-in. Only reachable on a non-production host.
+  if (session.preview) {
+    const rows = await sbRequest<Operator[]>('gt_operators?select=*&order=created_at.asc&limit=1');
+    return rows?.[0] ?? null;
+  }
   if (!session.clientRecordId) return null;
 
   const existing = await sbRequest<Operator[]>(

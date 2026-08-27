@@ -20,7 +20,7 @@
 // =============================================================================
 
 import 'server-only';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 
 const TG_ORIGIN = (process.env.TG_WIDGETS_ORIGIN || 'https://tg-widgets.vercel.app').replace(/\/+$/, '');
 const SESSION_COOKIE = 'tg_session';
@@ -32,6 +32,39 @@ export interface Session {
   clientRecordId: string | null;
   clientName: string;
   plan: string;
+  /** True for the review escape hatch (see getSession). Never set on a
+   *  production *.travelify.io host. */
+  preview?: boolean;
+}
+
+// -----------------------------------------------------------------------------
+//  PREVIEW MODE — a review escape hatch, structurally safe.
+//
+//  The console cannot authenticate on a *.vercel.app host, because the
+//  tg_session sign-in cookie is scoped to .travelify.io and the browser never
+//  sends it anywhere else. Until trips.travelify.io exists, that leaves the team
+//  unable to review the console at all.
+//
+//  So on a NON-production host only, getSession returns a preview session that
+//  acts as the first operator. It is safe because:
+//    - It NEVER applies on a *.travelify.io host. There, real sign-in always
+//      runs, so preview cannot reach the production console. This is structural,
+//      not a flag that could be left on.
+//    - The only non-production host that serves this app is the *.vercel.app
+//      deployment, which Vercel Authentication already restricts to the
+//      Travelgenix team. Preview therefore never widens who can reach it.
+//
+//  The ONE thing not to do while this exists: turn OFF Vercel deployment
+//  protection on the .vercel.app URLs. Remove this whole block at go-live once
+//  trips.travelify.io is live. Tracked in the handover.
+// -----------------------------------------------------------------------------
+
+function isPreviewHost(host: string | null): boolean {
+  if (!host) return false;
+  const h = host.toLowerCase().split(':')[0] ?? '';
+  // Any real Travelgenix domain gets real auth, no exceptions.
+  if (h === 'travelify.io' || h.endsWith('.travelify.io')) return false;
+  return h.endsWith('.vercel.app') || h === 'localhost' || h === '127.0.0.1';
 }
 
 interface MeResponse {
@@ -44,6 +77,19 @@ interface MeResponse {
  * signed out, which fails closed.
  */
 export async function getSession(): Promise<Session | null> {
+  const host = (await headers()).get('host');
+  if (isPreviewHost(host)) {
+    return {
+      userRecordId: 'preview',
+      email: 'preview@travelgenix',
+      role: 'admin',
+      clientRecordId: null,
+      clientName: 'Preview',
+      plan: '',
+      preview: true,
+    };
+  }
+
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -84,9 +130,18 @@ export async function getSession(): Promise<Session | null> {
  * fixed across 65 widgets on 2 Aug 2026 and it must not come back here.
  */
 export async function getOperatorId(session: Session | null): Promise<string | null> {
-  if (!session?.clientRecordId) return null;
+  if (!session) return null;
 
   const { sbRequest } = await import('./supabase');
+
+  if (session.preview) {
+    const rows = await sbRequest<Array<{ id: string }>>(
+      'gt_operators?select=id&order=created_at.asc&limit=1',
+    ).catch(() => null);
+    return rows?.[0]?.id ?? null;
+  }
+
+  if (!session.clientRecordId) return null;
   const rows = await sbRequest<Array<{ id: string }>>(
     `gt_operators?client_record_id=eq.${encodeURIComponent(session.clientRecordId)}&select=id&limit=1`,
   ).catch(() => null);

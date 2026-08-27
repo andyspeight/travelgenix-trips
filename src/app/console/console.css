@@ -107,3 +107,10 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 .c-pill--bk-deposit_paid { color: var(--tg-accent); }
 .c-pill--bk-paid { color: var(--tg-accent); }
 .c-pill--bk-cancelled, .c-pill--bk-expired { color: var(--tg-muted); }
+
+/* Preview review mode banner (removed at go-live). */
+.c-preview {
+  background: #fff4d6; border: 1px solid #e6c766; color: #6b5610;
+  padding: 9px 24px; font-size: 13px; text-align: center;
+  border-radius: var(--tg-radius); margin: 0 0 14px;
+}
