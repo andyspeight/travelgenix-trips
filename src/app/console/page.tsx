@@ -54,9 +54,13 @@ export default async function ConsolePage() {
                 {t.location ? ` · ${t.location}` : ''}
               </span>
               <span className="c-right">
-                {t.status === 'published' && (
+                {t.status === 'published' ? (
                   <a className="c-btn" href={`/trip/${operator.slug}/${t.slug}`} target="_blank" rel="noreferrer">
                     View page
+                  </a>
+                ) : (
+                  <a className="c-btn" href={`/trip/preview/${t.id}`} target="_blank" rel="noreferrer">
+                    Preview
                   </a>
                 )}
                 <a className="c-btn" href={`/console/trips/${t.id}`}>Edit</a>

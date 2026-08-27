@@ -53,22 +53,28 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
         </p>
       )}
 
-      <form action={setTripStatusAction} className="c-actions" style={{ marginTop: 0 }}>
-        <input type="hidden" name="id" value={trip.id} />
-        {trip.status === 'published' ? (
-          <>
-            <input type="hidden" name="status" value="draft" />
-            <button className="c-btn" type="submit">Unpublish</button>
-          </>
-        ) : (
-          <>
-            <input type="hidden" name="status" value="published" />
-            <button className="c-btn c-btn--primary" type="submit" disabled={openCount === 0}>
-              Publish
-            </button>
-          </>
-        )}
-      </form>
+      <div className="c-actions" style={{ marginTop: 0 }}>
+        <a className="c-btn" href={`/trip/preview/${trip.id}`} target="_blank" rel="noreferrer">
+          Preview
+        </a>
+        {/* display:contents lets the form's button sit in the same flex row. */}
+        <form action={setTripStatusAction} style={{ display: 'contents' }}>
+          <input type="hidden" name="id" value={trip.id} />
+          {trip.status === 'published' ? (
+            <>
+              <input type="hidden" name="status" value="draft" />
+              <button className="c-btn" type="submit">Unpublish</button>
+            </>
+          ) : (
+            <>
+              <input type="hidden" name="status" value="published" />
+              <button className="c-btn c-btn--primary" type="submit" disabled={openCount === 0}>
+                Publish
+              </button>
+            </>
+          )}
+        </form>
+      </div>
 
       <h2>Details</h2>
       <TripForm trip={trip} />
