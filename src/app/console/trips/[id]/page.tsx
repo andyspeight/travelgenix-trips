@@ -64,6 +64,7 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
         <a className="c-btn" href={`/trip/preview/${trip.id}`} target="_blank" rel="noreferrer">
           Preview
         </a>
+        <a className="c-btn" href={`/console/trips/${trip.id}/manage`}>Manage bookings</a>
         {/* display:contents lets the form's button sit in the same flex row. */}
         <form action={setTripStatusAction} style={{ display: 'contents' }}>
           <input type="hidden" name="id" value={trip.id} />

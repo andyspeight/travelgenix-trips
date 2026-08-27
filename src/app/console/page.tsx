@@ -63,6 +63,7 @@ export default async function ConsolePage() {
                     Preview
                   </a>
                 )}
+                <a className="c-btn" href={`/console/trips/${t.id}/manage`}>Manage</a>
                 <a className="c-btn" href={`/console/trips/${t.id}`}>Edit</a>
               </span>
             </li>

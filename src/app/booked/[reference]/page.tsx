@@ -40,6 +40,14 @@ export default async function BookedPage({
   const dead = c.status === 'expired' || c.status === 'cancelled';
   const confirmed = c.status === 'deposit_paid' || c.status === 'paid';
 
+  // The balance is what is left after the deposit. Only meaningful while there
+  // is a priced total and a deposit smaller than it.
+  const balancePence =
+    typeof c.total_pence === 'number' && typeof c.deposit_pence === 'number' && c.deposit_pence < c.total_pence
+      ? c.total_pence - c.deposit_pence
+      : null;
+  const balance = money(balancePence, c.currency);
+
   return (
     <div className="t-page bk-page">
       <div className="bk-wrap bk-confirm">
@@ -64,6 +72,7 @@ export default async function BookedPage({
           <div><dt>Travelling</dt><dd>{c.party_size} {c.party_size === 1 ? 'person' : 'people'}</dd></div>
           {total && <div><dt>Total</dt><dd className="bk-money">{total}</dd></div>}
           {deposit && held && <div><dt>Deposit to secure</dt><dd className="bk-money">{deposit}</dd></div>}
+          {balance && held && <div><dt>Balance due later</dt><dd className="bk-money">{balance}</dd></div>}
         </dl>
 
         <p className="bk-next">

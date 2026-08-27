@@ -876,6 +876,77 @@ export async function getBookingDetail(bookingId: string, operatorId: string): P
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Manage Trip — one trip's whole booking picture for the operator. Money
+//  summary, every booking, and every participant across them. Operator-gated on
+//  the trip, so a forged trip id returns null rather than another operator's
+//  bookings.
+// ---------------------------------------------------------------------------
+
+export interface TripBooking extends BookingWithTravellers {
+  package_name: string | null;
+  starts_on: string | null;
+  ends_on: string | null;
+}
+
+export interface TripManage {
+  trip: { id: string; title: string; slug: string; status: string; currency: string; hero_image_url: string | null };
+  money: { total_pence: number; collected_pence: number; outstanding_pence: number; currency: string };
+  counts: { bookings: number; participants: number; heads: number };
+  bookings: TripBooking[];
+}
+
+/** The counting statuses for a live booking: a hold that has not expired, plus
+ *  anything paid. A cancelled or expired booking is money that did not happen. */
+const LIVE_STATUSES = new Set(['pending', 'deposit_paid', 'paid']);
+
+export async function getTripManage(tripId: string, operatorId: string): Promise<TripManage | null> {
+  const trip = await getTripOwned(tripId, operatorId);
+  if (!trip) return null;
+
+  const rows =
+    (await sbRequest<Array<Record<string, unknown>>>(
+      `gt_bookings?operator_id=eq.${operatorId}` +
+        `&select=*,departure:gt_departures!inner(starts_on,ends_on,trip_id),` +
+        `package:gt_packages(name),` +
+        `travellers:gt_travellers(id,full_name,email,phone,date_of_birth,is_lead)` +
+        `&departure.trip_id=eq.${tripId}&order=created_at.desc`,
+    ).catch(() => null)) ?? [];
+
+  const bookings: TripBooking[] = rows.map((r) => {
+    const dep = (r.departure ?? {}) as Record<string, unknown>;
+    const pkg = (r.package ?? null) as Record<string, unknown> | null;
+    return {
+      ...(r as unknown as BookingWithTravellers),
+      package_name: pkg?.name ? String(pkg.name) : null,
+      starts_on: (dep.starts_on as string) ?? null,
+      ends_on: (dep.ends_on as string) ?? null,
+    };
+  });
+
+  let total = 0, collected = 0, participants = 0, heads = 0, liveBookings = 0;
+  for (const b of bookings) {
+    if (!LIVE_STATUSES.has(b.status)) continue;
+    liveBookings += 1;
+    heads += b.party_size || 0;
+    participants += (b.travellers || []).filter((t) => (t.full_name ?? '').trim()).length;
+    const t = b.total_pence ?? 0;
+    total += t;
+    // Deposit collected once deposit_paid; the full total once paid.
+    collected += b.status === 'paid' ? t : b.status === 'deposit_paid' ? (b.deposit_pence ?? 0) : 0;
+  }
+
+  return {
+    trip: {
+      id: trip.id, title: trip.title, slug: trip.slug, status: trip.status,
+      currency: trip.currency, hero_image_url: trip.hero_image_url,
+    },
+    money: { total_pence: total, collected_pence: collected, outstanding_pence: Math.max(0, total - collected), currency: trip.currency },
+    counts: { bookings: liveBookings, participants, heads },
+    bookings,
+  };
+}
+
 
 // ---------------------------------------------------------------------------
 //  Media library. Per operator. The bytes are in Vercel Blob; these rows are
