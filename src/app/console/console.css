@@ -79,3 +79,31 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 
 .c-empty { color: var(--tg-muted); padding: 26px 0; }
 .c-money { font-variant-numeric: tabular-nums; }
+
+/* --- bookings + tabs --- */
+.c-tabs { display: flex; gap: 4px; margin: 0 0 26px; border-bottom: 1px solid var(--tg-rule); }
+.c-tabs a {
+  padding: 10px 14px; font-size: 14px; font-weight: 500; text-decoration: none;
+  color: var(--tg-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.c-tabs a:hover { color: var(--tg-ink); }
+.c-tabs a[aria-current="page"] { color: var(--tg-ink); border-bottom-color: var(--tg-accent); }
+
+.c-scroll { overflow-x: auto; border: 1px solid var(--tg-rule); border-radius: var(--tg-radius); }
+.c-table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+.c-table thead th {
+  text-align: left; padding: 11px 16px; font-size: 11px; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--tg-muted); font-weight: 500;
+  border-bottom: 1px solid var(--tg-rule); white-space: nowrap; background: var(--tg-surface);
+}
+.c-table td { padding: 13px 16px; border-bottom: 1px solid var(--tg-rule); vertical-align: top; }
+.c-table tbody tr:last-child td { border-bottom: 0; }
+.c-table .c-num { text-align: right; font-variant-numeric: tabular-nums; }
+.c-table .c-mono { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .02em; }
+.c-sub-inline { display: block; color: var(--tg-muted); font-size: 12.5px; margin-top: 2px; }
+.c-when { color: var(--tg-muted); white-space: nowrap; }
+
+.c-pill--bk-pending { color: #8a6d0b; }
+.c-pill--bk-deposit_paid { color: var(--tg-accent); }
+.c-pill--bk-paid { color: var(--tg-accent); }
+.c-pill--bk-cancelled, .c-pill--bk-expired { color: var(--tg-muted); }

@@ -23,6 +23,11 @@ export default async function ConsolePage() {
 
   return (
     <>
+      <nav className="c-tabs">
+        <a href="/console" aria-current="page">Trips</a>
+        <a href="/console/bookings">Bookings</a>
+      </nav>
+
       <h1>Trips</h1>
       <p className="c-sub">
         Everything {operator.name} has on sale, and everything still in draft.

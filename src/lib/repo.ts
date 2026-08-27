@@ -253,6 +253,83 @@ export async function removeDeparture(
 }
 
 // ---------------------------------------------------------------------------
+//  Bookings — the read side (the console). Ownership is on operator_id, and
+//  traveller PII only ever leaves through these operator-gated reads.
+// ---------------------------------------------------------------------------
+
+export interface BookingRow {
+  id: string;
+  reference: string | null;
+  status: string;
+  party_size: number;
+  total_pence: number | null;
+  deposit_pence: number | null;
+  balance_pence: number | null;
+  currency: string;
+  departure_id: string | null;
+  hold_expires_at: string | null;
+  created_at: string;
+  traveller_name: string | null;
+  traveller_email: string | null;
+}
+
+export interface BookingWithTravellers extends BookingRow {
+  travellers: Array<{ id: string; full_name: string | null; email: string | null; phone: string | null; is_lead: boolean }>;
+}
+
+/** The operator's bookings, newest first, scoped to them. Never another
+ *  operator's, because the filter is on operator_id and the id is theirs. */
+export async function listBookings(operatorId: string, limit = 100): Promise<BookingRow[]> {
+  return (
+    (await sbRequest<BookingRow[]>(
+      `gt_bookings?operator_id=eq.${operatorId}&select=*&order=created_at.desc&limit=${limit}`,
+    )) ?? []
+  );
+}
+
+/** The manifest for one departure: who is coming, party sizes, status. Gated
+ *  on the departure belonging to this operator, so a guessed departure id
+ *  returns null rather than someone else's travellers. */
+export async function getDepartureManifest(
+  departureId: string,
+  operatorId: string,
+): Promise<{ bookings: BookingWithTravellers[] } | null> {
+  if (!isUuid(departureId)) return null;
+
+  // Confirm the departure is this operator's, via its trip. One join, so a
+  // forged departure id from another operator cannot reach their travellers.
+  const owned = await sbRequest<Array<{ id: string }>>(
+    `gt_departures?id=eq.${departureId}&select=id,gt_trips!inner(operator_id)` +
+      `&gt_trips.operator_id=eq.${operatorId}&limit=1`,
+  ).catch(() => null);
+  if (!owned?.length) return null;
+
+  const rows =
+    (await sbRequest<BookingWithTravellers[]>(
+      `gt_bookings?departure_id=eq.${departureId}&operator_id=eq.${operatorId}` +
+        `&select=*,travellers:gt_travellers(id,full_name,email,phone,is_lead)` +
+        `&order=created_at.asc`,
+    ).catch(() => null)) ?? [];
+
+  return { bookings: rows };
+}
+
+/** Look up one booking the operator owns, with its full party. Used by the
+ *  console booking detail and, later, refunds and amendments. */
+export async function getBookingOwned(
+  bookingId: string,
+  operatorId: string,
+): Promise<BookingWithTravellers | null> {
+  if (!isUuid(bookingId)) return null;
+  const rows = await sbRequest<BookingWithTravellers[]>(
+    `gt_bookings?id=eq.${bookingId}&operator_id=eq.${operatorId}` +
+      `&select=*,travellers:gt_travellers(id,full_name,email,phone,is_lead)&limit=1`,
+  ).catch(() => null);
+  return rows?.[0] ?? null;
+}
+
+
+// ---------------------------------------------------------------------------
 
 /** PostgREST will happily accept a malformed uuid and error at the database.
  *  Checking here turns that into a clean null instead of a 400 mid-render. */
