@@ -8,7 +8,8 @@
 //  operator's own library (server-side) so we own the file and it is reusable.
 // =============================================================================
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { upload } from '@vercel/blob/client';
 import { isVideoUrl } from '@/lib/url';
 
@@ -127,7 +128,7 @@ function MediaPicker({ accept, onSelect, onClose }: { accept: Accept; onSelect: 
     } finally { setImporting(null); }
   }, [prepend, onSelect, onClose]);
 
-  return (
+  const dialog = (
     <div className="mp-overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="mp-panel" onClick={(e) => e.stopPropagation()}>
         <div className="mp-head">
@@ -156,16 +157,21 @@ function MediaPicker({ accept, onSelect, onClose }: { accept: Accept; onSelect: 
 
         {tab === 'stock' && (
           <div className="mp-stock">
-            <form className="mp-search" onSubmit={(e) => { e.preventDefault(); runSearch(query, effectiveStockKind); }}>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Pexels, e.g. safari, beach, city" />
+            <div className="mp-search">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(query, effectiveStockKind); } }}
+                placeholder="Search Pexels, e.g. safari, beach, city"
+              />
               {accept === 'both' && (
                 <div className="mp-kind">
                   <button type="button" className={effectiveStockKind === 'image' ? 'is-on' : ''} onClick={() => { setStockKind('image'); if (query.trim()) runSearch(query, 'image'); }}>Photos</button>
                   <button type="button" className={effectiveStockKind === 'video' ? 'is-on' : ''} onClick={() => { setStockKind('video'); if (query.trim()) runSearch(query, 'video'); }}>Video</button>
                 </div>
               )}
-              <button type="submit" className="c-btn c-btn--primary">Search</button>
-            </form>
+              <button type="button" className="c-btn c-btn--primary" onClick={() => runSearch(query, effectiveStockKind)}>Search</button>
+            </div>
             {stockError && <p className="mp-err">{stockError}</p>}
             <div className="mp-grid">
               {searching && <p className="mp-note">Searching...</p>}
@@ -196,6 +202,8 @@ function MediaPicker({ accept, onSelect, onClose }: { accept: Accept; onSelect: 
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(dialog, document.body) : dialog;
 }
 
 // --- fields -----------------------------------------------------------------
