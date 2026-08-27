@@ -3,11 +3,12 @@
 // Client forms for the console. They exist so a failed save can show which
 // field was wrong, in place, without losing what the operator typed.
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { saveTripAction, saveDepartureAction } from './actions';
 import { EMPTY_STATE, type ActionState } from '@/lib/action-state';
 import type { Trip, Departure } from '@/lib/types';
+import { MediaField } from './media-picker';
 
 function Submit({ label, busy }: { label: string; busy: string }) {
   const { pending } = useFormStatus();
@@ -44,6 +45,7 @@ function Notice({ state }: { state: ActionState }) {
 
 export function TripForm({ trip }: { trip?: Trip }) {
   const [state, action] = useActionState(saveTripAction, EMPTY_STATE);
+  const [hero, setHero] = useState(trip?.hero_image_url ?? '');
   const e = state.errors;
 
   return (
@@ -89,20 +91,12 @@ export function TripForm({ trip }: { trip?: Trip }) {
         <textarea id="summary" name="summary" defaultValue={trip?.summary ?? ''} maxLength={600} />
       </Field>
 
-      <Field
-        name="hero_image_url"
-        label="Hero image"
-        hint="An https address. Uploads arrive in a later phase."
-        error={e.hero_image_url}
-      >
-        <input
-          id="hero_image_url"
-          name="hero_image_url"
-          type="url"
-          defaultValue={trip?.hero_image_url ?? ''}
-          placeholder="https://..."
-        />
-      </Field>
+      <div className={`c-field${e.hero_image_url ? ' c-field--bad' : ''}`}>
+        <span>Hero image or video</span>
+        <input type="hidden" name="hero_image_url" value={hero} />
+        <MediaField value={hero} onChange={setHero} accept="both" />
+        {e.hero_image_url && <p className="c-err">{e.hero_image_url}</p>}
+      </div>
 
       <div className="c-actions">
         <Submit label={trip ? 'Save changes' : 'Create trip'} busy="Saving..." />

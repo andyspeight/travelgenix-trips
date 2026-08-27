@@ -18,6 +18,7 @@ import { useFormStatus } from 'react-dom';
 import { saveTripContentAction } from './actions';
 import { EMPTY_STATE } from '@/lib/action-state';
 import { penceToInput } from '@/lib/content';
+import { MediaField, MediaListField } from './media-picker';
 import type { TripContent } from '@/lib/types';
 
 // --- edit model: TripContent with prices as pound strings ------------------
@@ -187,14 +188,8 @@ export function ContentEditor({ tripId, content }: { tripId: string; content: Tr
             </div>
 
             <div className="ce-sub">
-              <span className="ce-sub-label">Photos <em>(https image links)</em></span>
-              {d.images.map((im, k) => (
-                <div key={k} className="ce-row">
-                  <input value={im} placeholder="https://..." onChange={(e) => setDay(i, { images: d.images.map((x, j) => j === k ? e.target.value : x) })} />
-                  <button type="button" className="c-btn c-btn--quiet" onClick={() => setDay(i, { images: d.images.filter((_, j) => j !== k) })} aria-label="Remove">×</button>
-                </div>
-              ))}
-              <button type="button" className="c-btn ce-add" onClick={() => setDay(i, { images: [...d.images, ''] })}>Add photo</button>
+              <span className="ce-sub-label">Photos</span>
+              <MediaListField values={d.images} onChange={(v) => setDay(i, { images: v })} accept="image" />
             </div>
 
             <div className="ce-sub">
@@ -277,7 +272,8 @@ export function ContentEditor({ tripId, content }: { tripId: string; content: Tr
               <>
                 <textarea value={s.body} rows={4} placeholder="Section text. Leave a blank line between paragraphs." onChange={(e) => patch({ sections: m.sections.map((x, k) => k === i ? { ...x, body: e.target.value } : x) })} />
                 {s.type === 'feature' && (
-                  <input value={s.image} placeholder="https:// image link (optional)" onChange={(e) => patch({ sections: m.sections.map((x, k) => k === i ? { ...x, image: e.target.value } : x) })} />
+                  <MediaField value={s.image} accept="image" label="Section image"
+                    onChange={(url) => patch({ sections: m.sections.map((x, k) => k === i ? { ...x, image: url } : x) })} />
                 )}
               </>
             )}
@@ -286,7 +282,11 @@ export function ContentEditor({ tripId, content }: { tripId: string; content: Tr
         <button type="button" className="c-btn ce-add" onClick={() => patch({ sections: [...m.sections, { type: 'text', heading: '', body: '', image: '', columns: [] }] })}>Add section</button>
       </div>
 
-      <StringList label="Gallery" hint="https image links." value={m.gallery} onChange={(v) => patch({ gallery: v })} />
+      <div className="ce-block">
+        <div className="ce-block-head"><span>Gallery</span></div>
+        <p className="c-hint" style={{ marginTop: 0 }}>Images and video. The first item leads the gallery.</p>
+        <MediaListField values={m.gallery} onChange={(v) => patch({ gallery: v })} accept="both" />
+      </div>
 
       <div className="c-actions"><Save /></div>
     </form>

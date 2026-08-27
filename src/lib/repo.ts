@@ -439,6 +439,63 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
 
 
 // ---------------------------------------------------------------------------
+//  Media library. Per operator. The bytes are in Vercel Blob; these rows are
+//  the index over them. Everything is operator-scoped.
+// ---------------------------------------------------------------------------
+
+export interface MediaItem {
+  id: string;
+  operator_id: string;
+  url: string;
+  kind: 'image' | 'video';
+  filename: string | null;
+  content_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+}
+
+export async function listMedia(operatorId: string, limit = 200): Promise<MediaItem[]> {
+  return (
+    (await sbRequest<MediaItem[]>(
+      `gt_media?operator_id=eq.${operatorId}&select=*&order=created_at.desc&limit=${limit}`,
+    )) ?? []
+  );
+}
+
+/** Record an uploaded blob. Idempotent on (operator_id, url) so a double POST
+ *  from a flaky client cannot create two rows for one file. */
+export async function recordMedia(
+  operatorId: string,
+  item: { url: string; kind: 'image' | 'video'; filename?: string | null; content_type?: string | null; size_bytes?: number | null },
+): Promise<MediaItem | null> {
+  const rows = await sbRequest<MediaItem[]>('gt_media?on_conflict=operator_id,url', {
+    method: 'POST',
+    body: {
+      operator_id: operatorId,
+      url: item.url,
+      kind: item.kind,
+      filename: item.filename ?? null,
+      content_type: item.content_type ?? null,
+      size_bytes: item.size_bytes ?? null,
+    },
+    headers: { Prefer: 'return=representation,resolution=merge-duplicates' },
+  }).catch(() => null);
+  return rows?.[0] ?? null;
+}
+
+/** Remove one media row this operator owns. The blob itself is deleted by the
+ *  API route; this drops the index entry. */
+export async function deleteMediaOwned(mediaId: string, operatorId: string): Promise<MediaItem | null> {
+  if (!isUuid(mediaId)) return null;
+  const rows = await sbRequest<MediaItem[]>(
+    `gt_media?id=eq.${mediaId}&operator_id=eq.${operatorId}&select=*`,
+    { method: 'DELETE', headers: { Prefer: 'return=representation' } },
+  ).catch(() => null);
+  return rows?.[0] ?? null;
+}
+
+
+// ---------------------------------------------------------------------------
 
 /** PostgREST will happily accept a malformed uuid and error at the database.
  *  Checking here turns that into a clean null instead of a 400 mid-render. */

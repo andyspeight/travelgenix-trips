@@ -42,3 +42,24 @@ export function safeImageUrl(value: string | null | undefined): string | null {
     return null;
   }
 }
+
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+/** True when a (already host-validated) media URL points at a video, by
+ *  extension. Blob URLs keep the original extension, so this is reliable. */
+export function isVideoUrl(value: string | null | undefined): boolean {
+  const s = String(value ?? '');
+  try {
+    const u = new URL(s);
+    return VIDEO_EXT.test(u.pathname);
+  } catch {
+    return VIDEO_EXT.test(s);
+  }
+}
+
+/** Same host rule as safeImageUrl (the Blob store and the seed stock hosts),
+ *  but does not care whether it is image or video. Used wherever a stored media
+ *  URL is rendered; the caller picks img vs video with isVideoUrl. */
+export function safeMediaUrl(value: string | null | undefined): string | null {
+  return safeImageUrl(value); // host allowlist is identical; extension is not filtered
+}

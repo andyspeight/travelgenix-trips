@@ -18,7 +18,7 @@ import { availabilityByDeparture } from '@/lib/availability';
 import { format as money } from '@/lib/money';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
-import { safeImageUrl } from '@/lib/url';
+import { safeImageUrl, isVideoUrl } from '@/lib/url';
 import { tripsDbConfigured } from '@/lib/supabase';
 import type { Departure, TripContent, TripSection, Operator } from '@/lib/types';
 import type { Availability } from '@/lib/capacity';
@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     openGraph: {
       title: found.trip.title,
       description: found.trip.summary ?? undefined,
-      images: found.trip.hero_image_url ? [found.trip.hero_image_url] : undefined,
+      images: found.trip.hero_image_url && !isVideoUrl(found.trip.hero_image_url) ? [found.trip.hero_image_url] : undefined,
     },
   };
 }
@@ -91,8 +91,12 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
 
         {heroUrl && (
           <div className="t-hero">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={heroUrl} alt="" />
+            {isVideoUrl(heroUrl) ? (
+              <video src={heroUrl} autoPlay muted loop playsInline />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={heroUrl} alt="" />
+            )}
           </div>
         )}
 
@@ -252,8 +256,12 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
                 <ul className="t-gallery">
                   {content.gallery.map(safeImageUrl).filter(Boolean).map((src, i) => (
                     <li key={i}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src as string} alt="" loading="lazy" />
+                      {isVideoUrl(src as string) ? (
+                        <video src={src as string} muted loop playsInline controls preload="metadata" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={src as string} alt="" loading="lazy" />
+                      )}
                     </li>
                   ))}
                 </ul>
