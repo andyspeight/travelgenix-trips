@@ -258,3 +258,81 @@
 }
 
 .t-foot { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--op-rule); font-size: 13px; color: var(--op-muted); }
+
+/* =============================================================================
+   Booking checkout + confirmation (/book, /booked). Share .t-page so they
+   inherit the operator palette and font.
+   ============================================================================= */
+
+.bk-page { min-height: 100dvh; background: var(--op-wash, #fafafa); }
+.bk-wrap { max-width: 560px; margin-inline: auto; padding: 40px 24px 100px; }
+.bk-back { color: var(--op-muted, #59626a); text-decoration: none; font-size: 14px; }
+.bk-back:hover { color: var(--op-ink, #12161a); }
+
+.bk-lede { margin-bottom: 30px; }
+.bk-op { font-size: 13px; letter-spacing: .04em; color: var(--op-muted, #59626a); margin: 0 0 6px; }
+.bk-lede h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: -.02em; line-height: 1.1; margin: 0; }
+
+.bk-form { display: flex; flex-direction: column; gap: 22px; }
+.bk-form > .bk-section, .bk-form > .bk-field, .bk-form > fieldset { background: #fff; border: 1px solid var(--op-rule, #e3e7ea); border-radius: 10px; padding: 18px 18px; }
+.bk-section { display: flex; flex-direction: column; gap: 14px; }
+.bk-section h2 { font-size: 15px; margin: 0; letter-spacing: -.01em; }
+.bk-hint { font-size: 13px; color: var(--op-muted, #59626a); margin: -8px 0 2px; }
+
+.bk-field { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; }
+.bk-field > span, .bk-field > legend { font-size: 13px; font-weight: 600; }
+.bk-field em { font-weight: 400; color: var(--op-muted, #59626a); }
+.bk-field input {
+  font: inherit; font-size: 15px; padding: 10px 12px;
+  border: 1px solid var(--op-hairline, #d4d9dd); border-radius: 7px; background: #fff; color: var(--op-ink, #12161a);
+  width: 100%;
+}
+.bk-field input:focus { outline: 2px solid var(--op-accent); outline-offset: 1px; border-color: transparent; }
+.bk-field.bk-bad input { border-color: var(--tg-danger, #b3421f); }
+.bk-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 460px) { .bk-row { grid-template-columns: 1fr; } }
+
+.bk-dates { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.bk-date {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+  padding: 12px 14px; border: 1px solid var(--op-hairline, #d4d9dd); border-radius: 8px; cursor: pointer;
+}
+.bk-date:has(input:checked) { border-color: var(--op-accent); box-shadow: inset 0 0 0 1px var(--op-accent); }
+.bk-date input { accent-color: var(--op-accent); width: auto; }
+.bk-date-when { font-weight: 500; font-size: 14.5px; }
+.bk-date-price { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--op-ink, #12161a); }
+
+.bk-cta {
+  font: inherit; font-size: 16px; font-weight: 600; color: #fff; background: var(--op-accent);
+  border: 1px solid transparent; border-radius: 8px; padding: 14px 18px; cursor: pointer;
+  transition: transform .12s cubic-bezier(.16,1,.3,1), filter .12s;
+}
+.bk-cta:hover { filter: brightness(1.08); }
+.bk-cta:active { transform: translateY(1px); }
+.bk-cta:disabled { opacity: .65; cursor: progress; }
+
+.bk-err { color: var(--tg-danger, #b3421f); font-size: 13px; margin: 2px 0 0; }
+.bk-alert {
+  background: color-mix(in oklab, var(--tg-danger, #b3421f) 8%, #fff);
+  border: 1px solid color-mix(in oklab, var(--tg-danger, #b3421f) 30%, #fff);
+  color: var(--tg-danger, #b3421f); padding: 12px 14px; border-radius: 8px; margin: 0; font-size: 14px;
+}
+.bk-note { font-size: 13px; color: var(--op-muted, #59626a); margin: 0; text-align: center; }
+.bk-soldout { background: #fff; border: 1px solid var(--op-rule, #e3e7ea); border-radius: 10px; padding: 24px; color: var(--op-ink-2, #3b434b); }
+
+/* --- confirmation --- */
+.bk-confirm { text-align: center; max-width: 480px; padding-top: 64px; }
+.bk-tick {
+  width: 60px; height: 60px; margin: 0 auto 22px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: var(--op-accent, #0e6e5c);
+}
+.bk-confirm h1 { font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 8px; }
+.bk-ref { color: var(--op-muted, #59626a); margin: 0 0 26px; }
+.bk-ref strong { color: var(--op-ink, #12161a); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.bk-summary { text-align: left; background: #fff; border: 1px solid var(--op-rule, #e3e7ea); border-radius: 10px; margin: 0 0 22px; padding: 4px 18px; }
+.bk-summary div { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--op-rule, #e3e7ea); }
+.bk-summary div:last-child { border-bottom: 0; }
+.bk-summary dt { color: var(--op-muted, #59626a); margin: 0; font-size: 14px; }
+.bk-summary dd { margin: 0; font-weight: 500; text-align: right; }
+.bk-summary .bk-money { font-variant-numeric: tabular-nums; }
+.bk-next { color: var(--op-ink-2, #3b434b); line-height: 1.55; margin: 0 0 16px; }

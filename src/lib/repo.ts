@@ -19,6 +19,8 @@ import 'server-only';
 import { sbRequest, sbInsert, sbUpdate } from './supabase.ts';
 import { slugify } from './validate.ts';
 import type { TripInput, DepartureInput } from './validate.ts';
+import { newReference } from './booking.ts';
+import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import type { Operator, Trip, Departure, TripStatus } from './types.ts';
 import type { Session } from './auth.ts';
 
@@ -326,6 +328,90 @@ export async function getBookingOwned(
       `&select=*,travellers:gt_travellers(id,full_name,email,phone,is_lead)&limit=1`,
   ).catch(() => null);
   return rows?.[0] ?? null;
+}
+
+
+// ---------------------------------------------------------------------------
+//  Taking a hold — the write path. The atomic decision is the gt_hold_places
+//  Postgres function; this wires the real transports into the tested caller.
+// ---------------------------------------------------------------------------
+
+/** Reserve places on a departure, atomically. Never oversells: the database
+ *  function is the authority, this only orchestrates retries and the
+ *  ambiguous-failure probe. */
+export async function takeHold(req: HoldRequest): Promise<HoldOutcome> {
+  return holdPlaces(
+    {
+      callRpc: async (args) => {
+        // PostgREST returns a returns-jsonb function's value directly.
+        const out = await sbRequest<RpcResult>('rpc/gt_hold_places', { method: 'POST', body: args });
+        return (out ?? { ok: false, reason: 'error' }) as RpcResult;
+      },
+      probeByReference: async (reference) => {
+        const rows = await sbRequest<Array<{ id: string; reference: string; hold_expires_at: string | null }>>(
+          `gt_bookings?reference=eq.${encodeURIComponent(reference)}&select=id,reference,hold_expires_at&limit=1`,
+        ).catch(() => null);
+        const r = rows?.[0];
+        return r ? { id: r.id, reference: r.reference, holdExpiresAt: r.hold_expires_at, remaining: null } : null;
+      },
+      mintReference: newReference,
+      sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
+      jitter: () => Math.random(),
+    },
+    req,
+  );
+}
+
+/** A traveller's own confirmation, looked up by the reference they hold. Bearer
+ *  -token style: whoever has the reference can see the booking, exactly as a
+ *  confirmation link works. Returns only what a confirmation needs, joined to
+ *  the trip and operator for display. Never lists the whole party. */
+export interface Confirmation {
+  reference: string;
+  status: string;
+  party_size: number;
+  total_pence: number | null;
+  deposit_pence: number | null;
+  currency: string;
+  hold_expires_at: string | null;
+  traveller_name: string | null;
+  traveller_email: string | null;
+  trip_title: string;
+  operator_name: string;
+  starts_on: string | null;
+  ends_on: string | null;
+}
+
+export async function getConfirmation(reference: string): Promise<Confirmation | null> {
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
+      `&select=reference,status,party_size,total_pence,deposit_pence,currency,hold_expires_at,` +
+      `traveller_name,traveller_email,` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
+  ).catch(() => null);
+
+  const r = rows?.[0];
+  if (!r) return null;
+
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const op = (trip.operator ?? {}) as Record<string, unknown>;
+
+  return {
+    reference: String(r.reference),
+    status: String(r.status),
+    party_size: Number(r.party_size),
+    total_pence: (r.total_pence as number) ?? null,
+    deposit_pence: (r.deposit_pence as number) ?? null,
+    currency: String(r.currency ?? 'gbp'),
+    hold_expires_at: (r.hold_expires_at as string) ?? null,
+    traveller_name: (r.traveller_name as string) ?? null,
+    traveller_email: (r.traveller_email as string) ?? null,
+    trip_title: String(trip.title ?? 'your trip'),
+    operator_name: String(op.name ?? 'the operator'),
+    starts_on: (dep.starts_on as string) ?? null,
+    ends_on: (dep.ends_on as string) ?? null,
+  };
 }
 
 

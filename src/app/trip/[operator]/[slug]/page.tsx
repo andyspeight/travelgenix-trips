@@ -99,6 +99,7 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
           <aside className="t-rail">
             <OfferRail
               trip={trip}
+              tripSlug={trip.slug}
               operator={operator}
               departures={departures}
               availability={availability}
@@ -267,9 +268,10 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
 // ---------------------------------------------------------------------------
 
 function OfferRail({
-  trip, operator, departures, availability, fromPence,
+  trip, tripSlug, operator, departures, availability, fromPence,
 }: {
   trip: { currency: string };
+  tripSlug: string;
   operator: Operator;
   departures: Departure[];
   availability: Map<string, Availability>;
@@ -314,15 +316,18 @@ function OfferRail({
       )}
 
       <div className="t-rail-foot">
-        {/* The real disabled state, not a fake button. Stripe checkout takes
-            this slot in phase 2 and nothing else on the page has to move. */}
-        <button className="t-cta" type="button" disabled aria-describedby="t-cta-note">
-          Booking opens shortly
-        </button>
-        <p className="t-rail-note" id="t-cta-note">
-          Online booking is not open on this trip yet. Speak to {operator.name} to hold a place
-          in the meantime.
-        </p>
+        {departures.length > 0 ? (
+          <>
+            <a className="t-cta" href={`/book/${operator.slug}/${tripSlug}`}>Reserve a place</a>
+            <p className="t-rail-note">
+              We hold your places while {operator.name} confirms. No card is charged now.
+            </p>
+          </>
+        ) : (
+          <p className="t-rail-note">
+            No dates are open just now. Speak to {operator.name} about future departures.
+          </p>
+        )}
       </div>
     </div>
   );
