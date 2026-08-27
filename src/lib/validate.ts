@@ -180,6 +180,12 @@ export function validateDeparture(raw: Record<string, unknown>): Validated<Depar
   const deposit = raw.deposit_pence === '' || raw.deposit_pence == null ? null : toPence(raw.deposit_pence as string);
   if (raw.deposit_pence && deposit === null) errors.deposit_pence = 'That deposit is not a number.';
 
+  // A per-person ceiling so total = price x party can never overflow the int4
+  // pence column (max ~£21m). £500k a head is far beyond any real trip.
+  const PRICE_CEILING = 50_000_000; // £500,000 in pence
+  if (price !== null && price > PRICE_CEILING) errors.price_pence = 'That price looks too high. Check it.';
+  if (deposit !== null && deposit > PRICE_CEILING) errors.deposit_pence = 'That deposit looks too high. Check it.';
+
   if (price !== null && deposit !== null && price > 0 && deposit > price) {
     errors.deposit_pence = 'The deposit cannot be more than the price.';
   }

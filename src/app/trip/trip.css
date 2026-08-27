@@ -336,3 +336,5 @@
 .bk-summary dd { margin: 0; font-weight: 500; text-align: right; }
 .bk-summary .bk-money { font-variant-numeric: tabular-nums; }
 .bk-next { color: var(--op-ink-2, #3b434b); line-height: 1.55; margin: 0 0 16px; }
+
+.bk-tick--dead { background: var(--tg-danger, #b3421f); }

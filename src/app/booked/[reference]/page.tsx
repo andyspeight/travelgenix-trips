@@ -20,7 +20,8 @@ export default async function BookedPage({ params }: { params: Promise<{ referen
   const { reference } = await params;
   if (!tripsDbConfigured()) notFound();
 
-  const ref = normaliseReference(decodeURIComponent(reference));
+  // params are already decoded by Next; a second decode throws on a lone '%'.
+  const ref = normaliseReference(reference);
   if (!ref) notFound();
 
   const c = await getConfirmation(ref);
@@ -29,15 +30,21 @@ export default async function BookedPage({ params }: { params: Promise<{ referen
   const total = money(c.total_pence, c.currency);
   const deposit = money(c.deposit_pence, c.currency);
   const held = c.status === 'pending';
+  const dead = c.status === 'expired' || c.status === 'cancelled';
+  const confirmed = c.status === 'deposit_paid' || c.status === 'paid';
 
   return (
     <div className="t-page bk-page">
       <div className="bk-wrap bk-confirm">
-        <div className="bk-tick" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        <div className={`bk-tick${dead ? ' bk-tick--dead' : ''}`} aria-hidden="true">
+          {dead ? (
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+          )}
         </div>
 
-        <h1>{held ? 'Your place is held' : 'Booking confirmed'}</h1>
+        <h1>{dead ? (c.status === 'expired' ? 'This hold has expired' : 'This booking was cancelled') : confirmed ? 'Booking confirmed' : 'Your place is held'}</h1>
         <p className="bk-ref">Reference <strong>{c.reference}</strong></p>
 
         <dl className="bk-summary">
@@ -52,7 +59,9 @@ export default async function BookedPage({ params }: { params: Promise<{ referen
         </dl>
 
         <p className="bk-next">
-          {held ? (
+          {dead ? (
+            <>This place is no longer held. If you still want to travel, please book again or contact {c.operator_name}.</>
+          ) : held ? (
             <>We have emailed your confirmation{c.traveller_email ? ` to ${maskEmail(c.traveller_email)}` : ''}. {c.operator_name} will
             be in touch to confirm and take payment. Keep your reference handy.</>
           ) : (
@@ -60,7 +69,7 @@ export default async function BookedPage({ params }: { params: Promise<{ referen
           )}
         </p>
 
-        <p className="bk-note">No card has been charged. Online payment is coming soon.</p>
+        {!dead && <p className="bk-note">No card has been charged. Online payment is coming soon.</p>}
       </div>
     </div>
   );

@@ -205,6 +205,13 @@ test('a blank capacity is zero, which reads as "not set"', () => {
   assert.equal(r.value.capacity, 0);
 });
 
+test('a price beyond the sane ceiling is rejected (overflow guard)', () => {
+  // £500k a head is the ceiling; 60,000,000 pence = £600k must fail.
+  assert.ok(validateDeparture({ ...goodDep, price_pence: '600000' }).errors.price_pence);
+  // A real, high-but-plausible price passes.
+  assert.equal(validateDeparture({ ...goodDep, price_pence: '25000' }).ok, true);
+});
+
 test('an unknown status is rejected, not defaulted', () => {
   assert.equal(validateDeparture({ ...goodDep, status: 'nearly' }).ok, false);
 });

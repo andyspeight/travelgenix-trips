@@ -57,8 +57,9 @@ export type HoldReason =
   | 'departure_closed'
   | 'not_found'
   | 'invalid'
-  | 'busy'          // gate stayed jammed after every retry
-  | 'error';        // an unexpected or unrecoverable failure
+  | 'busy'            // gate stayed jammed after every retry
+  | 'too_many_holds'  // this email already holds the per-departure maximum
+  | 'error';          // an unexpected or unrecoverable failure
 
 export type HoldOutcome =
   | { ok: true; booking: HeldBooking }
@@ -103,6 +104,7 @@ const TERMINAL: Record<string, HoldReason> = {
   departure_closed: 'departure_closed',
   not_found: 'not_found',
   invalid: 'invalid',
+  too_many_holds: 'too_many_holds',
 };
 
 /**
@@ -115,6 +117,19 @@ export async function holdPlaces(deps: HoldDeps, req: HoldRequest): Promise<Hold
   let busy = 0;
   let refCollisions = 0;
   let ambiguous = 0;
+
+  // Resolve whether a reference we minted already committed. Distinguishes an
+  // empty result ('absent') from a probe that itself FAILED ('unknown'): we may
+  // never treat a failed probe as 'nothing committed', because that is exactly
+  // what leads to a double-insert.
+  async function probe(ref: string): Promise<{ state: 'found'; booking: HeldBooking } | { state: 'absent' } | { state: 'unknown' }> {
+    try {
+      const found = await deps.probeByReference(ref);
+      return found ? { state: 'found', booking: found } : { state: 'absent' };
+    } catch {
+      return { state: 'unknown' };
+    }
+  }
 
   for (let i = 0; i < HARD_ITERATION_CAP; i++) {
     let res: RpcResult;
@@ -129,13 +144,17 @@ export async function holdPlaces(deps: HoldDeps, req: HoldRequest): Promise<Hold
         p_travellers: req.travellers,
       });
     } catch {
-      // Ambiguous: the request may have committed before the failure. The
-      // reference is the idempotency key, so look for the row before doing
-      // anything that could double-insert.
-      const found = await deps.probeByReference(reference).catch(() => null);
-      if (found) return { ok: true, booking: found };
-      if (++ambiguous <= MAX_AMBIGUOUS_RETRIES) continue;
-      return { ok: false, reason: 'error' };
+      // AMBIGUOUS. The RPC may have committed before the failure. The reference
+      // is the idempotency key, so resolve it before doing anything that could
+      // double-insert.
+      const p = await probe(reference);
+      if (p.state === 'found') return { ok: true, booking: p.booking };
+      // Cannot confirm the row is absent -> must NOT retry the insert, or we risk
+      // a duplicate hold. Give up cleanly; any orphan self-heals on expiry.
+      if (p.state === 'unknown') return { ok: false, reason: 'error' };
+      // Confirmed absent: safe to retry the SAME reference, bounded.
+      if (++ambiguous > MAX_AMBIGUOUS_RETRIES) return { ok: false, reason: 'error' };
+      continue;
     }
 
     if (res.ok && res.id) {
@@ -159,6 +178,15 @@ export async function holdPlaces(deps: HoldDeps, req: HoldRequest): Promise<Hold
     }
 
     if (reason === 'reference_taken') {
+      // A reference WE minted collided with an existing row. For a client-random
+      // reference a genuine foreign collision is ~1 in 10^11; overwhelmingly this
+      // means OUR OWN prior attempt committed (an earlier ambiguous retry). So
+      // probe THIS reference before assuming a foreign collision.
+      const p = await probe(reference);
+      if (p.state === 'found') return { ok: true, booking: p.booking };
+      // Cannot confirm -> do not mint-and-reinsert blindly.
+      if (p.state === 'unknown') return { ok: false, reason: 'error' };
+      // Confirmed absent: a true foreign collision. Mint a fresh reference.
       if (++refCollisions > MAX_REFERENCE_RETRIES) return { ok: false, reason: 'error' };
       reference = deps.mintReference();
       continue;
@@ -196,6 +224,8 @@ export function holdMessage(reason: HoldReason, remaining?: number): string {
       return 'Something in the booking was not right. Please check your details and try again.';
     case 'busy':
       return 'A lot of people are booking this trip right now. Please try again in a moment.';
+    case 'too_many_holds':
+      return 'You already have several places held on this departure. Please complete or cancel those before holding more.';
     default:
       return 'Something went wrong holding your place. Please try again.';
   }

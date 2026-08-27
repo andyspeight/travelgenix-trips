@@ -33,7 +33,10 @@ function deps(script: Array<RpcResult | Error> | ((call: { p_reference: string }
       if (step instanceof Error) throw step;
       return step!;
     },
-    probeByReference: async (ref) => (opts.probe ? opts.probe(ref) : null),
+    probeByReference: async (ref) => {
+      if (opts.probe) return opts.probe(ref); // may throw to simulate an 'unknown' probe
+      return null;
+    },
     mintReference: () => { refCounter++; const r = `TGT-REF${refCounter}-0000`; refs.push(r); return r; },
     sleep: async (ms) => { sleeps.push(ms); },
     jitter: () => 0.5,
@@ -158,6 +161,58 @@ test('an unknown reason is not retried', async () => {
   const out = await holdPlaces(h.deps, REQ);
   assert.deepEqual(out, { ok: false, reason: 'error' });
   assert.equal(h.calls, 1);
+});
+
+test('reference_taken whose row is OUR OWN (ambiguous retry committed) returns it, no new booking', async () => {
+  // The exact interleaving the review found: first call commits then loses its
+  // response; probe cannot see it (returns null once); retry hits the unique
+  // index -> reference_taken; the row IS ours and must be returned, not re-minted.
+  const committed: HeldBooking = { id: 'bk-B1', reference: 'TGT-SAME-0000', holdExpiresAt: null, remaining: 2 };
+  let probeCalls = 0;
+  let calls = 0;
+  const d: HoldDeps = {
+    callRpc: async () => {
+      calls++;
+      if (calls === 1) throw new Error('response lost after commit');
+      return { ok: false, reason: 'reference_taken' }; // retry hits our own committed row
+    },
+    probeByReference: async () => {
+      probeCalls++;
+      // First probe (ambiguous path) misses; second probe (reference_taken path) finds it.
+      return probeCalls >= 2 ? committed : null;
+    },
+    mintReference: (() => { let n = 0; return () => (n++ === 0 ? 'TGT-SAME-0000' : 'TGT-NEW-0000'); })(),
+    sleep: async () => {}, jitter: () => 0,
+  };
+  const out = await holdPlaces(d, REQ);
+  assert.equal(out.ok, true, 'the committed booking is returned');
+  if (out.ok) assert.equal(out.booking.id, 'bk-B1', 'the ORIGINAL booking, not a duplicate');
+});
+
+test('reference_taken with an UNKNOWN probe (probe throws) does NOT mint-and-reinsert', async () => {
+  let calls = 0;
+  const d: HoldDeps = {
+    callRpc: async () => { calls++; return { ok: false, reason: 'reference_taken' }; },
+    probeByReference: async () => { throw new Error('probe failed'); },
+    mintReference: () => 'TGT-R-0000',
+    sleep: async () => {}, jitter: () => 0,
+  };
+  const out = await holdPlaces(d, REQ);
+  assert.deepEqual(out, { ok: false, reason: 'error' }, 'gives up rather than risk a double-insert');
+  assert.equal(calls, 1, 'did not re-insert with a fresh reference');
+});
+
+test('ambiguous failure with an UNKNOWN probe does NOT retry the RPC', async () => {
+  let calls = 0;
+  const d: HoldDeps = {
+    callRpc: async () => { calls++; throw new Error('down'); },
+    probeByReference: async () => { throw new Error('also down'); },
+    mintReference: () => 'TGT-R-0000',
+    sleep: async () => {}, jitter: () => 0,
+  };
+  const out = await holdPlaces(d, REQ);
+  assert.deepEqual(out, { ok: false, reason: 'error' });
+  assert.equal(calls, 1, 'never retried the insert when the outcome could not be confirmed');
 });
 
 test('every reason has a human message', () => {

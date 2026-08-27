@@ -20,7 +20,7 @@
 import { sbRequest, tripsDbConfigured } from '@/lib/supabase';
 import { listOpenDepartures, isUuid } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
-import type { Trip, Operator } from '@/lib/types';
+import type { Trip, Operator, OperatorBrand } from '@/lib/types';
 
 export const revalidate = 60;
 
@@ -71,9 +71,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       heroImageUrl: trip.hero_image_url,
       content: trip.content,
     },
-    // Name and branding only. Never the contact email, never the Stripe account.
+    // Name and PUBLIC branding only. brand is whitelisted, never spread: it can
+    // carry replyTo (the operator's email) and other private fields.
     operator: operator
-      ? { name: operator.name, slug: operator.slug, brand: operator.brand }
+      ? { name: operator.name, slug: operator.slug, brand: publicBrand(operator.brand) }
       : null,
     departures: departures.map((d) => {
       const seats = availability.get(d.id);
@@ -91,6 +92,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       };
     }),
   }, 200);
+}
+
+/** Only the brand fields a public embed needs. Never replyTo or anything added
+ *  to the brand blob later. */
+function publicBrand(brand: OperatorBrand | undefined | null) {
+  if (!brand) return null;
+  return {
+    logoUrl: brand.logoUrl ?? null,
+    primaryColour: brand.primaryColour ?? null,
+    accentColour: brand.accentColour ?? null,
+    fontFamily: brand.fontFamily ?? null,
+  };
 }
 
 function json(body: unknown, status: number) {

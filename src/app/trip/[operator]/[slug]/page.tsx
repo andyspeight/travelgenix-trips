@@ -18,6 +18,7 @@ import { availabilityByDeparture } from '@/lib/availability';
 import { format as money } from '@/lib/money';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
+import { safeImageUrl } from '@/lib/url';
 import { tripsDbConfigured } from '@/lib/supabase';
 import type { Departure, TripContent, TripSection, Operator } from '@/lib/types';
 import type { Availability } from '@/lib/capacity';
@@ -61,6 +62,8 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
   // One value drives the whole page, checked against the ground it renders on.
   const accent = readableOn(operator.brand?.primaryColour, PAGE_BACKGROUND, '#0e6e5c');
   const font = operatorFont(operator.brand?.fontFamily);
+  const heroUrl = safeImageUrl(trip.hero_image_url);
+  const logoUrl = safeImageUrl(operator.brand?.logoUrl);
 
   // "From" is the cheapest priced departure. An unpriced one is not free, so it
   // does not get to be the cheapest.
@@ -79,17 +82,17 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
             heading, which the craft floor bans outright. */}
         <header className="t-mast">
           <div className="t-mast-wrap">
-            {operator.brand?.logoUrl
+            {logoUrl
               // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={operator.brand.logoUrl} alt={operator.name} />
+              ? <img src={logoUrl} alt={operator.name} />
               : <span>{operator.name}</span>}
           </div>
         </header>
 
-        {trip.hero_image_url && (
+        {heroUrl && (
           <div className="t-hero">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={trip.hero_image_url} alt="" />
+            <img src={heroUrl} alt="" />
           </div>
         )}
 
@@ -175,9 +178,9 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
 
                       {day.images && day.images.length > 0 && (
                         <div className="t-day-shots">
-                          {day.images.map((src, k) => (
+                          {day.images.map(safeImageUrl).filter(Boolean).map((src, k) => (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img key={k} src={src} alt="" loading="lazy" />
+                            <img key={k} src={src as string} alt="" loading="lazy" />
                           ))}
                         </div>
                       )}
@@ -247,10 +250,10 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
               <section>
                 <h2>Gallery</h2>
                 <ul className="t-gallery">
-                  {content.gallery.map((src, i) => (
+                  {content.gallery.map(safeImageUrl).filter(Boolean).map((src, i) => (
                     <li key={i}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt="" loading="lazy" />
+                      <img src={src as string} alt="" loading="lazy" />
                     </li>
                   ))}
                 </ul>
@@ -355,9 +358,9 @@ function Section({ section }: { section: TripSection }) {
       <section>
         <h2>{section.heading}</h2>
         <div className="t-feature">
-          {section.image && (
+          {safeImageUrl(section.image) && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={section.image} alt="" loading="lazy" />
+            <img src={safeImageUrl(section.image) as string} alt="" loading="lazy" />
           )}
           <div><Paragraphs body={section.body} /></div>
         </div>

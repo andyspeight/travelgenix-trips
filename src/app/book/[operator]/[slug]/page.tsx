@@ -35,9 +35,12 @@ export default async function BookPage({
   const availability = await availabilityByDeparture(all);
   // Only offer departures that still have room. A sold-out date on a booking
   // form is a dead end.
+  // A departure only appears if it can actually be held: capacity set, and not
+  // sold out. A capacity-0 departure would just return sold_out, a dead end.
   const bookable = all.filter((d) => {
+    if (d.capacity <= 0) return false;
     const a = availability.get(d.id);
-    return !a || a.capacity <= 0 || !a.soldOut;
+    return !a || !a.soldOut;
   });
 
   const accent = readableOn(operator.brand?.primaryColour, '#ffffff', '#0e6e5c');

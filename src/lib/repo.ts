@@ -348,9 +348,12 @@ export async function takeHold(req: HoldRequest): Promise<HoldOutcome> {
         return (out ?? { ok: false, reason: 'error' }) as RpcResult;
       },
       probeByReference: async (reference) => {
+        // Deliberately NOT wrapped in .catch: hold.ts must distinguish a probe
+        // that found no row (safe to retry) from a probe that FAILED (unknown,
+        // must not retry the insert). A throw here means 'unknown'.
         const rows = await sbRequest<Array<{ id: string; reference: string; hold_expires_at: string | null }>>(
           `gt_bookings?reference=eq.${encodeURIComponent(reference)}&select=id,reference,hold_expires_at&limit=1`,
-        ).catch(() => null);
+        );
         const r = rows?.[0];
         return r ? { id: r.id, reference: r.reference, holdExpiresAt: r.hold_expires_at, remaining: null } : null;
       },
