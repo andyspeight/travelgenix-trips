@@ -947,6 +947,46 @@ export async function getTripManage(tripId: string, operatorId: string): Promise
   };
 }
 
+/** The statuses an operator may set by hand from the Manage table. These are the
+ *  offline-payment equivalents of WeTravel's bulk actions (bank transfer taken →
+ *  mark paid); real online payment will flip these through Stripe later. */
+export const MANUAL_BOOKING_STATUSES = new Set(['deposit_paid', 'paid', 'cancelled']);
+
+/**
+ * Set a status on several of a trip's bookings at once. Scoped THREE ways so a
+ * forged id cannot reach another booking: operator_id (ownership), the trip's
+ * own departures, and the id list. None of these statuses can oversell — they
+ * only keep or reduce the taken count — so no hold RPC is involved. Returns how
+ * many rows changed.
+ */
+export async function bulkSetBookingStatus(
+  tripId: string,
+  operatorId: string,
+  ids: string[],
+  status: string,
+): Promise<number> {
+  if (!MANUAL_BOOKING_STATUSES.has(status)) return 0;
+  if (!(await getTripOwned(tripId, operatorId))) return 0;
+
+  const clean = ids.filter((id) => isUuid(id)).slice(0, 500);
+  if (clean.length === 0) return 0;
+
+  // The trip's departures, so the update cannot touch this operator's OTHER
+  // trips even if an id from one were slipped in.
+  const deps = await sbRequest<Array<{ id: string }>>(
+    `gt_departures?trip_id=eq.${tripId}&select=id`,
+  ).catch(() => null);
+  const depIds = (deps ?? []).map((d) => d.id);
+  if (depIds.length === 0) return 0;
+
+  const rows = await sbUpdate<{ id: string }>(
+    'gt_bookings',
+    `id=in.(${clean.join(',')})&operator_id=eq.${operatorId}&departure_id=in.(${depIds.join(',')})`,
+    { status, updated_at: nowIso() },
+  );
+  return rows.length;
+}
+
 
 // ---------------------------------------------------------------------------
 //  Media library. Per operator. The bytes are in Vercel Blob; these rows are

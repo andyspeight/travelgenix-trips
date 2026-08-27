@@ -42,6 +42,7 @@ import {
   createPackage,
   updatePackage,
   removePackage,
+  bulkSetBookingStatus,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -180,6 +181,27 @@ export async function removePackageAction(form: FormData): Promise<void> {
   // what a traveller booked survives. The console reflects that it stayed.
   await removePackage(packageId, tripId, ctx.operatorId);
   revalidatePath(`/console/trips/${tripId}`);
+}
+
+// ---------------------------------------------------------------------------
+//  Manage Trip — bulk booking status (offline payment reconciliation).
+//  Called directly from the client table with plain args, not FormData.
+// ---------------------------------------------------------------------------
+
+export async function bulkSetBookingStatusAction(
+  tripId: string,
+  ids: string[],
+  status: string,
+): Promise<{ ok: boolean; updated: number }> {
+  const ctx = await requireOperator();
+  if (!ctx) return { ok: false, updated: 0 };
+
+  const list = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [];
+  const updated = await bulkSetBookingStatus(tripId, ctx.operatorId, list, String(status));
+
+  revalidatePath(`/console/trips/${tripId}/manage`);
+  revalidatePath('/console/bookings');
+  return { ok: updated > 0, updated };
 }
 
 // ---------------------------------------------------------------------------

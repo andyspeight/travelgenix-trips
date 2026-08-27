@@ -10,11 +10,12 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import { ensureOperator, getTripManage, type TripBooking } from '@/lib/repo';
-import { participantRows, shortRange } from '@/lib/participants';
+import { participantRows } from '@/lib/participants';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { format as money } from '@/lib/money';
 import { safeImageUrl } from '@/lib/url';
 import { SignInPrompt, NoOperator, DbMissing } from '../../../states';
+import { BookingsTable } from './bookings-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,11 @@ export default async function ManageTripPage({
       </nav>
 
       {tab === 'bookings' ? (
-        <BookingsTab bookings={bookings} currency={m.currency} />
+        bookings.length === 0 ? (
+          <p className="c-empty">No bookings on this trip yet. They appear here the moment a traveller reserves a place.</p>
+        ) : (
+          <BookingsTable bookings={bookings} tripId={trip.id} currency={m.currency} />
+        )
       ) : (
         <ParticipantsTab bookings={bookings} tripId={trip.id} />
       )}
@@ -107,54 +112,6 @@ export default async function ManageTripPage({
 }
 
 // ---------------------------------------------------------------------------
-
-function BookingsTab({ bookings, currency }: { bookings: TripBooking[]; currency: string }) {
-  if (bookings.length === 0) {
-    return <p className="c-empty">No bookings on this trip yet. They appear here the moment a traveller reserves a place.</p>;
-  }
-  return (
-    <div className="c-scroll">
-      <table className="c-table">
-        <thead>
-          <tr>
-            <th scope="col">Reference</th>
-            <th scope="col">Lead traveller</th>
-            <th scope="col">Dates</th>
-            <th scope="col">Room</th>
-            <th scope="col" className="c-num">Party</th>
-            <th scope="col">Status</th>
-            <th scope="col" className="c-num">Total</th>
-            <th scope="col" className="c-num">Outstanding</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bookings.map((b) => {
-            const faded = b.status === 'cancelled' || b.status === 'expired';
-            // Outstanding, the same basis as the trip summary: nothing collected
-            // while held, the deposit once deposit_paid, all of it once paid.
-            const t = b.total_pence ?? 0;
-            const outstanding = faded ? null
-              : b.status === 'paid' ? 0
-              : b.status === 'deposit_paid' ? Math.max(0, t - (b.deposit_pence ?? 0))
-              : t;
-            return (
-              <tr key={b.id} style={faded ? { opacity: 0.55 } : undefined}>
-                <td className="c-mono"><a href={`/console/bookings/${b.id}`}>{b.reference ?? '—'}</a></td>
-                <td>{b.traveller_name ?? '—'}</td>
-                <td className="c-when">{b.starts_on ? shortRange(b.starts_on, b.ends_on) : '—'}</td>
-                <td>{b.package_name ?? '—'}</td>
-                <td className="c-num">{b.party_size}</td>
-                <td><span className={`c-pill c-pill--bk-${b.status}`}>{STATUS_LABEL[b.status] ?? b.status}</span></td>
-                <td className="c-num c-money">{money(b.total_pence, currency) ?? '—'}</td>
-                <td className="c-num c-money">{outstanding === 0 ? '—' : money(outstanding, currency) ?? '—'}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 function ParticipantsTab({ bookings, tripId }: { bookings: TripBooking[]; tripId: string }) {
   const rows = participantRows(bookings);
