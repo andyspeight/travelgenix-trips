@@ -79,9 +79,19 @@ export async function GET() {
 
   const database = await probeDatabase();
 
-  // If every single one is absent, the cause is almost never five separate
-  // mistakes. It is the deployment being older than the variables.
-  const allAbsent = Object.values(vars).every((v) => v === 'absent');
+  // One shape of failure at a time. Five separate mistakes is never the
+  // explanation; a single systemic cause always is.
+  const states = Object.values(vars);
+  const allAbsent = states.every((v) => v === 'absent');
+  const allEmpty = states.every((v) => v === 'empty');
+
+  const diagnosis = database.reachable
+    ? 'Wired correctly.'
+    : allAbsent
+      ? 'Every variable is absent. Vercel snapshots environment variables at deploy time, so a deployment built before they were saved cannot see them. Redeploy from the Deployments tab.'
+      : allEmpty
+        ? 'Every variable exists but is empty. Vercel\'s import screen reads .env.example and pre-fills the NAMES along with its blank values, so deploying straight from import creates named variables with nothing in them. Redeploying cannot help: edit each value in Settings, then redeploy.'
+        : 'Mixed. See vars for which are set and database.detail for why the connection fails.';
 
   return Response.json({
     ok: true,
@@ -94,10 +104,6 @@ export async function GET() {
     commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? '').slice(0, 7) || 'unknown',
     vars,
     database,
-    diagnosis: allAbsent
-      ? 'Every variable is absent. Vercel snapshots environment variables at deploy time, so a deployment built before they were saved cannot see them. Redeploy from the Deployments tab.'
-      : database.reachable
-        ? 'Wired correctly.'
-        : 'Some variables are set. See vars and database.detail for which and why.',
+    diagnosis,
   });
 }
