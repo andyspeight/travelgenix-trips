@@ -206,3 +206,18 @@ export interface Signature {
   signed_at: string;
   body_sha256: string;
 }
+
+export type WaitlistStatus = 'waiting' | 'invited' | 'converted' | 'removed';
+
+export interface WaitlistEntry {
+  id: string;
+  trip_id: string;
+  departure_id: string | null;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  party_size: number;
+  note: string | null;
+  status: WaitlistStatus;
+  created_at: string;
+}

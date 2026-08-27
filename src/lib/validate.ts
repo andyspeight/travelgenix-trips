@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { toPence } from './money.ts';
+import { looksLikeEmail } from './booking.ts';
 
 import type { FieldErrors } from './action-state.ts';
 export type { FieldErrors };
@@ -228,6 +229,63 @@ export interface PackageInput {
   image_url: string | null;
   info_url: string | null;
   sort_order: number;
+}
+
+// ---------------------------------------------------------------------------
+//  Waitlist — a would-be traveller's details when a trip is full (public input)
+// ---------------------------------------------------------------------------
+
+export interface WaitlistInput {
+  trip_id: string;
+  departure_id: string | null;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  party_size: number;
+  note: string | null;
+}
+
+function isUuidStr(v: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+}
+
+export function validateWaitlist(raw: Record<string, unknown>): Validated<WaitlistInput> {
+  const errors: FieldErrors = {};
+
+  const trip_id = text(raw.trip_id);
+  if (!isUuidStr(trip_id)) errors.trip_id = 'This trip could not be identified.';
+
+  const departureRaw = text(raw.departure_id);
+  const departure_id = isUuidStr(departureRaw) ? departureRaw : null;
+
+  const full_name = text(raw.full_name);
+  if (!full_name) errors.full_name = 'We need a name.';
+  else if (full_name.length > 120) errors.full_name = 'That name is too long.';
+
+  const email = text(raw.email);
+  if (!email) errors.email = 'We need an email to let you know when a place opens.';
+  else if (!looksLikeEmail(email)) errors.email = 'That email does not look right.';
+
+  const phone = text(raw.phone);
+  if (phone.length > 40) errors.phone = 'That phone number is too long.';
+
+  const partyRaw = text(raw.party_size) || '1';
+  const party_size = Number.parseInt(partyRaw, 10);
+  if (!Number.isFinite(party_size) || party_size < 1) errors.party_size = 'How many places would you like?';
+  else if (party_size > 20) errors.party_size = 'For a large group, contact the operator directly.';
+
+  const note = text(raw.note).slice(0, 1000);
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      trip_id, departure_id, full_name, email,
+      phone: phone || null,
+      party_size: Number.isFinite(party_size) && party_size >= 1 ? party_size : 1,
+      note: note || null,
+    },
+  };
 }
 
 export function validatePackage(raw: Record<string, unknown>): Validated<PackageInput> {

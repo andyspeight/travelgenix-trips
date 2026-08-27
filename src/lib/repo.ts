@@ -18,11 +18,11 @@
 import 'server-only';
 import { sbRequest, sbInsert, sbUpdate } from './supabase.ts';
 import { slugify } from './validate.ts';
-import type { TripInput, DepartureInput, PackageInput } from './validate.ts';
+import type { TripInput, DepartureInput, PackageInput, WaitlistInput } from './validate.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
-import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package } from './types.ts';
+import type { Operator, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry } from './types.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -945,6 +945,69 @@ export async function getTripManage(tripId: string, operatorId: string): Promise
     counts: { bookings: liveBookings, participants, heads },
     bookings,
   };
+}
+
+// ---------------------------------------------------------------------------
+//  Waitlist. Public insert (verified against a real published trip), operator-
+//  gated read and status changes. A full trip captures interest instead of
+//  turning it away.
+// ---------------------------------------------------------------------------
+
+const WAITLIST_STATUSES = new Set(['waiting', 'invited', 'converted', 'removed']);
+
+/** Join a waitlist. The trip must exist and be published, resolved server-side,
+ *  so a forged trip id or a draft cannot be waitlisted against. */
+export async function joinWaitlist(input: WaitlistInput): Promise<boolean> {
+  if (!isUuid(input.trip_id)) return false;
+  const trip = await sbRequest<Array<{ id: string; operator_id: string }>>(
+    `gt_trips?id=eq.${input.trip_id}&status=eq.published&select=id,operator_id&limit=1`,
+  ).catch(() => null);
+  if (!trip?.length) return false;
+
+  // A departure_id, if given, must belong to this trip, or it is dropped.
+  let departureId: string | null = null;
+  if (input.departure_id && isUuid(input.departure_id)) {
+    const dep = await sbRequest<Array<{ id: string }>>(
+      `gt_departures?id=eq.${input.departure_id}&trip_id=eq.${input.trip_id}&select=id&limit=1`,
+    ).catch(() => null);
+    if (dep?.length) departureId = input.departure_id;
+  }
+
+  const rows = await sbInsert<{ id: string }>('gt_waitlist', {
+    trip_id: input.trip_id, departure_id: departureId,
+    full_name: input.full_name, email: input.email, phone: input.phone,
+    party_size: input.party_size, note: input.note,
+  });
+  return rows.length > 0;
+}
+
+export async function listWaitlist(tripId: string, operatorId: string): Promise<WaitlistEntry[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return (
+    (await sbRequest<WaitlistEntry[]>(
+      `gt_waitlist?trip_id=eq.${tripId}&status=neq.removed&select=*&order=created_at.desc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+export async function countWaitlist(tripId: string, operatorId: string): Promise<number> {
+  if (!(await getTripOwned(tripId, operatorId))) return 0;
+  const rows = await sbRequest<WaitlistEntry[]>(
+    `gt_waitlist?trip_id=eq.${tripId}&status=neq.removed&select=id`,
+  ).catch(() => null);
+  return rows?.length ?? 0;
+}
+
+export async function setWaitlistStatus(
+  entryId: string,
+  tripId: string,
+  operatorId: string,
+  status: string,
+): Promise<boolean> {
+  if (!isUuid(entryId) || !WAITLIST_STATUSES.has(status)) return false;
+  if (!(await getTripOwned(tripId, operatorId))) return false;
+  const rows = await sbUpdate('gt_waitlist', `id=eq.${entryId}&trip_id=eq.${tripId}`, { status, updated_at: nowIso() });
+  return rows.length > 0;
 }
 
 // ---------------------------------------------------------------------------

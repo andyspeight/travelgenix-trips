@@ -9,13 +9,15 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripManage, type TripBooking } from '@/lib/repo';
+import { ensureOperator, getTripManage, listWaitlist, type TripBooking } from '@/lib/repo';
 import { participantRows } from '@/lib/participants';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { format as money } from '@/lib/money';
 import { safeImageUrl } from '@/lib/url';
+import { setWaitlistStatusAction } from '../../../actions';
 import { SignInPrompt, NoOperator, DbMissing } from '../../../states';
 import { BookingsTable } from './bookings-table';
+import type { WaitlistEntry } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +26,7 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelled', expired: 'Expired',
 };
 
-type Tab = 'bookings' | 'participants';
+type Tab = 'bookings' | 'participants' | 'waitlist';
 
 export default async function ManageTripPage({
   params, searchParams,
@@ -34,7 +36,7 @@ export default async function ManageTripPage({
 }) {
   const { id } = await params;
   const { tab: tabRaw } = await searchParams;
-  const tab: Tab = tabRaw === 'participants' ? 'participants' : 'bookings';
+  const tab: Tab = tabRaw === 'participants' ? 'participants' : tabRaw === 'waitlist' ? 'waitlist' : 'bookings';
 
   const session = await getSession();
   if (!session) return <SignInPrompt />;
@@ -47,6 +49,7 @@ export default async function ManageTripPage({
   if (!data) notFound();
 
   const { trip, money: m, counts, bookings } = data;
+  const waitlist = await listWaitlist(id, operator.id);
   const hero = safeImageUrl(trip.hero_image_url);
   const base = `/console/trips/${trip.id}/manage`;
 
@@ -93,7 +96,9 @@ export default async function ManageTripPage({
         <a href={`${base}?tab=participants`} aria-current={tab === 'participants' ? 'page' : undefined}>
           Participants <span className="mt-count">{counts.participants}</span>
         </a>
-        <span className="mt-soon" title="Coming soon">Waitlist</span>
+        <a href={`${base}?tab=waitlist`} aria-current={tab === 'waitlist' ? 'page' : undefined}>
+          Waitlist <span className="mt-count">{waitlist.length}</span>
+        </a>
         <span className="mt-soon" title="Coming soon">Messages</span>
         <span className="mt-soon" title="Coming soon">Promote</span>
       </nav>
@@ -104,11 +109,74 @@ export default async function ManageTripPage({
         ) : (
           <BookingsTable bookings={bookings} tripId={trip.id} currency={m.currency} />
         )
-      ) : (
+      ) : tab === 'participants' ? (
         <ParticipantsTab bookings={bookings} tripId={trip.id} />
+      ) : (
+        <WaitlistTab entries={waitlist} tripId={trip.id} />
       )}
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+
+function WaitlistTab({ entries, tripId }: { entries: WaitlistEntry[]; tripId: string }) {
+  if (entries.length === 0) {
+    return <p className="c-empty">No one is waiting. When every departure is full, travellers can add themselves here instead of hitting a dead end.</p>;
+  }
+  return (
+    <div className="c-scroll">
+      <table className="c-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Email</th>
+            <th scope="col">Phone</th>
+            <th scope="col" className="c-num">Places</th>
+            <th scope="col">Note</th>
+            <th scope="col">Added</th>
+            <th scope="col">Status</th>
+            <th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((w) => (
+            <tr key={w.id} style={w.status === 'invited' ? { opacity: 0.7 } : undefined}>
+              <td>{w.full_name}</td>
+              <td>{w.email}</td>
+              <td>{w.phone ?? '—'}</td>
+              <td className="c-num">{w.party_size}</td>
+              <td>{w.note ? <span title={w.note}>{w.note.length > 40 ? `${w.note.slice(0, 40)}…` : w.note}</span> : '—'}</td>
+              <td className="c-when">{formatWhen(w.created_at)}</td>
+              <td><span className={`c-pill c-pill--wl-${w.status}`}>{w.status}</span></td>
+              <td className="c-right">
+                {w.status !== 'invited' && (
+                  <form action={setWaitlistStatusAction} style={{ display: 'inline' }}>
+                    <input type="hidden" name="id" value={w.id} />
+                    <input type="hidden" name="trip_id" value={tripId} />
+                    <input type="hidden" name="status" value="invited" />
+                    <button className="c-btn c-btn--quiet" type="submit">Mark invited</button>
+                  </form>
+                )}
+                <form action={setWaitlistStatusAction} style={{ display: 'inline' }}>
+                  <input type="hidden" name="id" value={w.id} />
+                  <input type="hidden" name="trip_id" value={tripId} />
+                  <input type="hidden" name="status" value="removed" />
+                  <button className="c-btn c-btn--quiet" type="submit">Remove</button>
+                </form>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatWhen(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return ''; }
 }
 
 // ---------------------------------------------------------------------------

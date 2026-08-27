@@ -16,15 +16,17 @@
 
 import { redirect } from 'next/navigation';
 import { validateBooking } from '@/lib/booking';
-import { takeHold, getConfirmation } from '@/lib/repo';
+import { validateWaitlist } from '@/lib/validate';
+import { takeHold, getConfirmation, joinWaitlist } from '@/lib/repo';
 import { holdMessage } from '@/lib/hold';
+import { fail, type ActionState } from '@/lib/action-state';
 import { sendTravellerConfirmation } from '@/lib/notify';
 // A 'use server' module may export ONLY async functions. The state shape and its
 // empty value therefore live in action-state.ts, not here: a plain const or
 // interface exported from this file does not survive the client boundary, and a
 // client reading its `.errors` gets undefined (the /book 500 fixed 27 Aug 2026,
-// exactly the hazard action-state.ts already documents for the console).
-import type { ActionState } from '@/lib/action-state';
+// exactly the hazard action-state.ts already documents for the console). fail
+// and the ActionState type are imported above.
 
 function fields(form: FormData): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -95,4 +97,22 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
   }
 
   redirect(`/booked/${encodeURIComponent(ref)}`);
+}
+
+// ---------------------------------------------------------------------------
+//  Waitlist — public, when a trip is full. Never redirects: it stays on the
+//  page and confirms in place.
+// ---------------------------------------------------------------------------
+
+export async function joinWaitlistAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const raw: Record<string, unknown> = {};
+  for (const [k, v] of form.entries()) if (typeof v === 'string') raw[k] = v;
+
+  const { ok, errors, value } = validateWaitlist(raw);
+  if (!ok) return fail(errors, 'Please check the highlighted fields.');
+
+  const done = await joinWaitlist(value);
+  if (!done) return fail({}, 'Sorry, we could not add you just now. Please try again.');
+
+  return { ok: true, errors: {}, message: "You are on the list. We will email you the moment a place opens." };
 }

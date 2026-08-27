@@ -310,3 +310,9 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 .c-stats dt { color: var(--tg-muted); margin: 0 0 6px; font-size: 12px; letter-spacing: .02em; }
 .c-stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.3rem; letter-spacing: -.01em; }
 .c-stats .c-stat-accent { color: var(--tg-accent); }
+
+/* waitlist status pills */
+.c-pill--wl-waiting { color: #8a6d0b; }
+.c-pill--wl-invited { color: var(--tg-accent); }
+.c-pill--wl-converted { color: var(--tg-accent); }
+.c-pill--wl-removed { color: var(--tg-muted); }

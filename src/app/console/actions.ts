@@ -43,6 +43,7 @@ import {
   updatePackage,
   removePackage,
   bulkSetBookingStatus,
+  setWaitlistStatus,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -202,6 +203,18 @@ export async function bulkSetBookingStatusAction(
   revalidatePath(`/console/trips/${tripId}/manage`);
   revalidatePath('/console/bookings');
   return { ok: updated > 0, updated };
+}
+
+export async function setWaitlistStatusAction(form: FormData): Promise<void> {
+  const ctx = await requireOperator();
+  if (!ctx) return;
+
+  const id = String(form.get('id') || '');
+  const tripId = String(form.get('trip_id') || '');
+  const status = String(form.get('status') || '');
+
+  await setWaitlistStatus(id, tripId, ctx.operatorId, status);
+  revalidatePath(`/console/trips/${tripId}/manage`);
 }
 
 // ---------------------------------------------------------------------------

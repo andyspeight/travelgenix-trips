@@ -10,6 +10,7 @@ import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { BookingForm } from '../../form';
+import { WaitlistForm } from '../../waitlist-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,10 +65,7 @@ export default async function BookPage({
           </div>
 
           {bookable.length === 0 ? (
-            <p className="bk-soldout">
-              Every departure of this trip is currently full. Please contact {operator.name}
-              about joining a waiting list or future dates.
-            </p>
+            <WaitlistForm tripId={trip.id} operatorName={operator.name} />
           ) : (
             <BookingForm departures={bookable} packages={packages} currency={trip.currency} initialDeparture={departure} />
           )}
