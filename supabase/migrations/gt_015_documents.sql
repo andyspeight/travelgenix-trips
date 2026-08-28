@@ -12,6 +12,13 @@
 --  band and is recorded here, keyed to the booking, the traveller (null for a
 --  booking-wide document) and the field. Registration completeness then reads
 --  these rows exactly as it reads answered questions.
+--
+--  NOTE (28 Aug 2026): gt_002 had ALREADY created gt_documents as a placeholder
+--  with a different shape (kind / file_url), so the create-if-not-exists below
+--  was a NO-OP against the live database and the table kept the wrong columns.
+--  gt_017_documents_reshape.sql is the fix and the authority on the shape: it
+--  drops the empty placeholder and builds the real table. This block is kept for
+--  the record only.
 -- =============================================================================
 
 create table if not exists public.gt_documents (
