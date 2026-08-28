@@ -71,6 +71,9 @@ export interface Trip {
  * sections (packing list, visa notes, the vehicle). Every field here exists
  * because a real tour carried it, not because it seemed likely.
  */
+/** The shapes the day-by-day itinerary can take. */
+export type ItineraryLayout = 'days' | 'timeline';
+
 export interface TripContent {
   overview?: string;
   durationText?: string;
@@ -79,6 +82,9 @@ export interface TripContent {
   /** The itinerary-at-a-glance table: one row per day. */
   glance?: TripGlanceRow[];
   days?: TripDay[];
+  /** How the day-by-day is drawn. 'days' is the default stacked cards; 'timeline'
+   *  runs the same days down a vertical spine with a marker each. */
+  itineraryLayout?: ItineraryLayout;
   included?: string[];
   excluded?: string[];
   /** Trip-wide priced extras. A zero price means "not priced", not free. */

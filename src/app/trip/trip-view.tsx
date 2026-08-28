@@ -137,9 +137,12 @@ export function TripView({
             {content.days && content.days.length > 0 && (
               <section>
                 <h2>Day by day</h2>
-                <ol className="t-days">
+                <ol className={content.itineraryLayout === 'timeline' ? 't-timeline' : 't-days'}>
                   {content.days.map((day, i) => (
                     <li key={i}>
+                      {content.itineraryLayout === 'timeline' && (
+                        <span className="t-timeline-mark" aria-hidden="true">{i + 1}</span>
+                      )}
                       {(day.label || day.date) && (
                         <span className="t-day-label">
                           {[day.label, day.date].filter(Boolean).join('  ·  ')}

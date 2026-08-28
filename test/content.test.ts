@@ -43,6 +43,14 @@ test('non-object input does not throw', () => {
   assert.deepEqual(sanitiseTripContent(42), {});
 });
 
+test('itineraryLayout: timeline is kept, anything else is the (absent) default', () => {
+  assert.equal(sanitiseTripContent({ itineraryLayout: 'timeline' }).itineraryLayout, 'timeline');
+  // The default 'days' is not stored, so an untouched trip stays clean.
+  assert.equal(sanitiseTripContent({ itineraryLayout: 'days' }).itineraryLayout, undefined);
+  assert.equal(sanitiseTripContent({ itineraryLayout: 'nonsense' }).itineraryLayout, undefined);
+  assert.equal(sanitiseTripContent({}).itineraryLayout, undefined);
+});
+
 test('a hostile image URL never survives anywhere it can appear', () => {
   const c = sanitiseTripContent({
     gallery: ['data:text/html,<script>', 'https://evil.example/x.jpg'],

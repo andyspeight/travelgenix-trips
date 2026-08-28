@@ -19,7 +19,7 @@ import { saveTripContentAction } from './actions';
 import { EMPTY_STATE } from '@/lib/action-state';
 import { penceToInput } from '@/lib/content';
 import { MediaField, MediaListField } from './media-picker';
-import type { TripContent } from '@/lib/types';
+import type { TripContent, ItineraryLayout } from '@/lib/types';
 
 // --- edit model: TripContent with prices as pound strings ------------------
 
@@ -30,6 +30,7 @@ interface EditModel {
   highlights: string[];
   glance: { day: string; date: string; destination: string; accommodation: string }[];
   days: EditDay[];
+  itineraryLayout: ItineraryLayout;
   included: string[]; excluded: string[];
   extras: { name: string; price: string; note: string; recommended: boolean }[];
   sections: EditSection[];
@@ -49,6 +50,7 @@ function fromContent(c: TripContent): EditModel {
       images: d.images ?? [],
       activities: (d.optionalActivities ?? []).map((a) => ({ name: a.name, price: penceToInput(a.pricePence) })),
     })),
+    itineraryLayout: c.itineraryLayout === 'timeline' ? 'timeline' : 'days',
     included: c.included ?? [],
     excluded: c.excluded ?? [],
     extras: (c.extras ?? []).map((e) => ({ name: e.name, price: penceToInput(e.pricePence), note: e.note ?? '', recommended: !!e.recommended })),
@@ -69,6 +71,7 @@ function toWire(m: EditModel): unknown {
       facts: d.facts, images: d.images,
       optionalActivities: d.activities.map((a) => ({ name: a.name, pricePence: a.price })),
     })),
+    itineraryLayout: m.itineraryLayout,
     included: m.included, excluded: m.excluded,
     extras: m.extras.map((e) => ({ name: e.name, pricePence: e.price, note: e.note, recommended: e.recommended })),
     sections: m.sections.map((s) => s.type === 'columns'
@@ -162,7 +165,16 @@ export function ContentEditor({ tripId, content }: { tripId: string; content: Tr
 
       {/* Day by day */}
       <div className="ce-block">
-        <div className="ce-block-head"><span>Day by day</span></div>
+        <div className="ce-block-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span>Day by day</span>
+          <label className="ce-layout" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="c-hint" style={{ margin: 0 }}>Layout</span>
+            <select value={m.itineraryLayout} onChange={(e) => patch({ itineraryLayout: e.target.value as ItineraryLayout })} aria-label="Itinerary layout">
+              <option value="days">Stacked days</option>
+              <option value="timeline">Timeline</option>
+            </select>
+          </label>
+        </div>
         {m.days.map((d, i) => (
           <div key={i} className="ce-day">
             <div className="ce-day-top">

@@ -153,6 +153,8 @@ export function sanitiseTripContent(raw: unknown): TripContent {
     highlights: strList(o.highlights),
     glance: glance(o.glance),
     days: days(o.days),
+    // Only store a non-default layout, so an untouched trip stays clean.
+    itineraryLayout: o.itineraryLayout === 'timeline' ? 'timeline' : undefined,
     included: strList(o.included),
     excluded: strList(o.excluded),
     extras: extras(o.extras),
