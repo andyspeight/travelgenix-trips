@@ -55,6 +55,8 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
       <nav className="c-tabs">
         <a href="/console">Trips</a>
         <a href="/console/bookings" aria-current="page">Bookings</a>
+        <a href="/console/reports">Reports</a>
+        <a href="/console/team">Team</a>
       </nav>
 
       <p className="c-sub" style={{ marginBottom: 4 }}>

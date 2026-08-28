@@ -3,7 +3,8 @@
 // =============================================================================
 
 import { getSession } from '@/lib/auth';
-import { ensureOperator, listTrips } from '@/lib/repo';
+import { ensureOperator, listTrips, listOperatorMembers } from '@/lib/repo';
+import { resolveOperatorRole, canEdit } from '@/lib/members';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { SignInPrompt, NoOperator, DbMissing } from './states';
 
@@ -19,7 +20,9 @@ export default async function ConsolePage() {
   const operator = await ensureOperator(session);
   if (!operator) return <NoOperator />;
 
-  const trips = await listTrips(operator.id);
+  const [trips, members] = await Promise.all([listTrips(operator.id), listOperatorMembers(operator.id)]);
+  const role = session.preview ? 'owner' : resolveOperatorRole(operator.contact_email, session.email, members);
+  const mayEdit = canEdit(role);
 
   return (
     <>
@@ -27,6 +30,7 @@ export default async function ConsolePage() {
         <a href="/console" aria-current="page">Trips</a>
         <a href="/console/bookings">Bookings</a>
         <a href="/console/reports">Reports</a>
+        <a href="/console/team">Team</a>
       </nav>
 
       <h1>Trips</h1>
@@ -34,9 +38,15 @@ export default async function ConsolePage() {
         Everything {operator.name} has on sale, and everything still in draft.
       </p>
 
-      <div className="c-actions" style={{ marginTop: 0, marginBottom: 26 }}>
-        <a className="c-btn c-btn--primary" href="/console/trips/new">New trip</a>
-      </div>
+      {!mayEdit && (
+        <p className="c-note c-note--calm">You have view-only access, so you can see trips and bookings but not change them.</p>
+      )}
+
+      {mayEdit && (
+        <div className="c-actions" style={{ marginTop: 0, marginBottom: 26 }}>
+          <a className="c-btn c-btn--primary" href="/console/trips/new">New trip</a>
+        </div>
+      )}
 
       {trips.length === 0 ? (
         <p className="c-empty">

@@ -4,7 +4,8 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, getOptionsForTrip, listPromoCodes, describePromo } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, getOptionsForTrip, listPromoCodes, describePromo, listOperatorMembers } from '@/lib/repo';
+import { resolveOperatorRole, canEdit } from '@/lib/members';
 import { format as money } from '@/lib/money';
 import { TripForm, DepartureForm, PackageForm, OptionForm, PromoForm } from '../../forms';
 import { ContentEditor } from '../../content-editor';
@@ -33,13 +34,15 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   const openCount = departures.filter((d) => d.status === 'open').length;
   const publicUrl = `/trip/${operator.slug}/${trip.slug}`;
 
-  const [regForm, waiver, packages, options, promos] = await Promise.all([
+  const [regForm, waiver, packages, options, promos, members] = await Promise.all([
     getFormForTrip(trip.id, operator.id),
     getWaiverForTrip(trip.id, operator.id),
     getPackagesForTrip(trip.id, operator.id),
     getOptionsForTrip(trip.id, operator.id),
     listPromoCodes(trip.id, operator.id),
+    listOperatorMembers(operator.id),
   ]);
+  const mayEdit = session.preview ? true : canEdit(resolveOperatorRole(operator.contact_email, session.email, members));
 
   return (
     <>
@@ -54,6 +57,13 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
           <>Not visible to anyone yet.</>
         )}
       </p>
+
+      {!mayEdit && (
+        <p className="c-note c-note--calm">
+          You have view-only access. You can see everything on this trip, but changes will not save.
+          Ask an owner if you need edit access.
+        </p>
+      )}
 
       {trip.status === 'draft' && openCount === 0 && (
         <p className="c-note c-note--calm">

@@ -149,11 +149,41 @@ export async function getOperatorId(session: Session | null): Promise<string | n
   return rows?.[0]?.id ?? null;
 }
 
-/** Fails closed: no session, or a session with no operator, owns nothing. */
-export async function requireOperator(): Promise<{ session: Session; operatorId: string } | null> {
+export interface OperatorContext {
+  session: Session;
+  operatorId: string;
+  /** The signed-in person's role for this operator (owner/manager/viewer). */
+  role: import('./types').OperatorRole;
+}
+
+/** Fails closed: no session, or a session with no operator, owns nothing. Also
+ *  resolves the person's team role, so callers can gate writes. */
+export async function requireOperator(): Promise<OperatorContext | null> {
   const session = await getSession();
   if (!session) return null;
   const operatorId = await getOperatorId(session);
   if (!operatorId) return null;
-  return { session, operatorId };
+
+  // Preview review mode acts as the first operator with full control.
+  if (session.preview) return { session, operatorId, role: 'owner' };
+
+  const { resolveRoleById } = await import('./repo');
+  const role = await resolveRoleById(operatorId, session.email);
+  return { session, operatorId, role };
+}
+
+/** Like requireOperator, but null for a viewer: the guard for every write. A
+ *  viewer never reaches a write path through it, so a missed UI check cannot
+ *  turn into a write. */
+export async function requireEditor(): Promise<OperatorContext | null> {
+  const ctx = await requireOperator();
+  if (!ctx) return null;
+  return ctx.role === 'viewer' ? null : ctx;
+}
+
+/** Owners only. The guard for managing the team. */
+export async function requireOwner(): Promise<OperatorContext | null> {
+  const ctx = await requireOperator();
+  if (!ctx) return null;
+  return ctx.role === 'owner' ? ctx : null;
 }

@@ -19,8 +19,9 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { requireOperator } from '@/lib/auth';
+import { requireEditor, requireOwner } from '@/lib/auth';
 import { validateTrip, validateDeparture, validatePackage, validateOption, validatePromo, isValidTripStatus } from '@/lib/validate';
+import { validateMember } from '@/lib/members';
 import { sanitiseTripContent } from '@/lib/content';
 import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
 import { normaliseReference } from '@/lib/booking';
@@ -53,6 +54,9 @@ import {
   deleteMessageTemplate,
   savePromoCode,
   removePromoCode,
+  addOperatorMember,
+  setOperatorMemberRole,
+  removeOperatorMember,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -65,7 +69,7 @@ function fields(form: FormData): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 export async function saveTripAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const raw = fields(form);
@@ -93,7 +97,7 @@ export async function saveTripAction(_prev: ActionState, form: FormData): Promis
 // ---------------------------------------------------------------------------
 
 export async function setTripStatusAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   const tripId = String(form.get('id') || '');
@@ -122,7 +126,7 @@ export async function setTripStatusAction(form: FormData): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function saveDepartureAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const raw = fields(form);
@@ -145,7 +149,7 @@ export async function saveDepartureAction(_prev: ActionState, form: FormData): P
 // ---------------------------------------------------------------------------
 
 export async function removeDepartureAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   const tripId = String(form.get('trip_id') || '');
@@ -160,7 +164,7 @@ export async function removeDepartureAction(form: FormData): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function savePackageAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const raw = fields(form);
@@ -181,7 +185,7 @@ export async function savePackageAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function removePackageAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   const tripId = String(form.get('trip_id') || '');
@@ -198,7 +202,7 @@ export async function removePackageAction(form: FormData): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function saveOptionAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const raw = fields(form);
@@ -219,7 +223,7 @@ export async function saveOptionAction(_prev: ActionState, form: FormData): Prom
 }
 
 export async function removeOptionAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   const tripId = String(form.get('trip_id') || '');
@@ -241,7 +245,7 @@ export async function bulkSetBookingStatusAction(
   ids: string[],
   status: string,
 ): Promise<{ ok: boolean; updated: number }> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return { ok: false, updated: 0 };
 
   const list = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [];
@@ -253,7 +257,7 @@ export async function bulkSetBookingStatusAction(
 }
 
 export async function setWaitlistStatusAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   const id = String(form.get('id') || '');
@@ -269,7 +273,7 @@ export async function setWaitlistStatusAction(form: FormData): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function sendBroadcastAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const tripId = String(form.get('id') || '');
@@ -291,7 +295,7 @@ export async function sendBroadcastAction(_prev: ActionState, form: FormData): P
 }
 
 export async function saveTemplateAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   const name = String(form.get('name') || '').trim().slice(0, 120);
@@ -304,7 +308,7 @@ export async function saveTemplateAction(form: FormData): Promise<void> {
 }
 
 export async function deleteTemplateAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   await deleteMessageTemplate(String(form.get('id') || ''), ctx.operatorId);
@@ -316,7 +320,7 @@ export async function deleteTemplateAction(form: FormData): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function savePromoAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const raw = fields(form);
@@ -332,7 +336,7 @@ export async function savePromoAction(_prev: ActionState, form: FormData): Promi
 }
 
 export async function removePromoAction(form: FormData): Promise<void> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return;
 
   await removePromoCode(String(form.get('id') || ''), ctx.operatorId);
@@ -340,9 +344,44 @@ export async function removePromoAction(form: FormData): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+//  Team — owner-only. Managing who can do what is the one thing a manager
+//  cannot do, so these gate on requireOwner, not requireEditor.
+// ---------------------------------------------------------------------------
+
+export async function addMemberAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOwner();
+  if (!ctx) return fail({}, 'Only an owner can manage the team.');
+
+  const { ok, errors, value } = validateMember(fields(form));
+  if (!ok) return fail(errors, 'Check the highlighted fields.');
+
+  await addOperatorMember(ctx.operatorId, value, ctx.session.email || null);
+  revalidatePath('/console/team');
+  return { ok: true, errors: {}, message: 'Saved.' };
+}
+
+export async function setMemberRoleAction(form: FormData): Promise<void> {
+  const ctx = await requireOwner();
+  if (!ctx) return;
+
+  const id = String(form.get('id') || '');
+  const { value } = validateMember({ email: 'x@x.x', role: form.get('role') });
+  await setOperatorMemberRole(id, ctx.operatorId, value.role);
+  revalidatePath('/console/team');
+}
+
+export async function removeMemberAction(form: FormData): Promise<void> {
+  const ctx = await requireOwner();
+  if (!ctx) return;
+
+  await removeOperatorMember(String(form.get('id') || ''), ctx.operatorId);
+  revalidatePath('/console/team');
+}
+
+// ---------------------------------------------------------------------------
 
 export async function saveTripContentAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const tripId = String(form.get('id') || '');
@@ -372,7 +411,7 @@ export async function saveTripContentAction(_prev: ActionState, form: FormData):
 // ---------------------------------------------------------------------------
 
 export async function saveFormAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const tripId = String(form.get('id') || '');
@@ -395,7 +434,7 @@ export async function saveFormAction(_prev: ActionState, form: FormData): Promis
 }
 
 export async function saveWaiverAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
 
   const tripId = String(form.get('id') || '');

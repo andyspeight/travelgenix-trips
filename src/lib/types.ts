@@ -25,6 +25,20 @@ export interface Operator {
   custom_domain: string | null;
 }
 
+/** A person's authority inside one operator's Trips console. owner manages the
+ *  team and everything below it; manager edits trips and bookings but not the
+ *  team; viewer is read-only. */
+export type OperatorRole = 'owner' | 'manager' | 'viewer';
+
+export interface OperatorMember {
+  id: string;
+  operator_id: string;
+  email: string;
+  role: OperatorRole;
+  invited_by: string | null;
+  created_at: string;
+}
+
 export interface OperatorBrand {
   logoUrl?: string;
   primaryColour?: string;

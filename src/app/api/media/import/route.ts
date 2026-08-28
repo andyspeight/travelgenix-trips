@@ -5,7 +5,7 @@
 // never supplies a URL), streams it into Blob, and records it.
 
 import { put } from '@vercel/blob';
-import { requireOperator } from '@/lib/auth';
+import { requireEditor } from '@/lib/auth';
 import { recordMedia } from '@/lib/repo';
 import { resolvePexelsImport, isPexelsFileUrl, pexelsConfigured, type MediaKind } from '@/lib/pexels';
 
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // a video stream can take a moment
 
 export async function POST(request: Request): Promise<Response> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return Response.json({ error: 'unauthorized' }, { status: 401 });
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return Response.json({ error: 'media_storage_unconfigured' }, { status: 503 });

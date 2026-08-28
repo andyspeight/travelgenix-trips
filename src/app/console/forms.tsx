@@ -5,9 +5,10 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveTripAction, saveDepartureAction, savePackageAction, saveOptionAction, savePromoAction } from './actions';
+import { saveTripAction, saveDepartureAction, savePackageAction, saveOptionAction, savePromoAction, addMemberAction } from './actions';
 import { EMPTY_STATE, type ActionState } from '@/lib/action-state';
 import type { Trip, Departure, Package, TripOption } from '@/lib/types';
+import { ROLES } from '@/lib/members';
 import { MediaField } from './media-picker';
 
 function Submit({ label, busy }: { label: string; busy: string }) {
@@ -327,6 +328,32 @@ export function PromoForm({ tripId }: { tripId: string }) {
 
       <div className="c-actions">
         <Submit label="Add code" busy="Saving..." />
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export function MemberForm() {
+  const [state, action] = useActionState(addMemberAction, EMPTY_STATE);
+  const e = state.errors;
+
+  return (
+    <form action={action} noValidate>
+      <Notice state={state} />
+      <div className="c-row">
+        <Field name="email" label="Email" hint="The address they sign in with." error={e.email}>
+          <input id="email" name="email" type="email" placeholder="colleague@agency.com" required />
+        </Field>
+        <Field name="role" label="Role" error={e.role}>
+          <select id="role" name="role" defaultValue="viewer">
+            {ROLES.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="c-actions">
+        <Submit label="Add teammate" busy="Saving..." />
       </div>
     </form>
   );

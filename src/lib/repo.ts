@@ -24,8 +24,9 @@ import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole } from './types.ts';
 import { deleteDocument } from './storage.ts';
+import { resolveOperatorRole, emailKey } from './members.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -93,6 +94,93 @@ export async function getOperatorById(id: string): Promise<Operator | null> {
   if (!isUuid(id)) return null;
   const rows = await sbRequest<Operator[]>(`gt_operators?id=eq.${id}&select=*&limit=1`).catch(() => null);
   return rows?.[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+//  Team roles (gt_016). Authorisation within an operator; identity is SSO. The
+//  rules live in lib/members.ts (pure, tested); these are the reads and writes.
+// ---------------------------------------------------------------------------
+
+export async function listOperatorMembers(operatorId: string): Promise<OperatorMember[]> {
+  if (!isUuid(operatorId)) return [];
+  return (
+    (await sbRequest<OperatorMember[]>(
+      `gt_operator_members?operator_id=eq.${operatorId}&select=*&order=created_at.asc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+/** The signed-in person's role for this operator, resolved from the contact and
+ *  the member list. Fails safe: an unreadable member list reads as no team,
+ *  which keeps existing users owner rather than locking anyone out. */
+export async function resolveRoleById(operatorId: string, email: string): Promise<OperatorRole> {
+  if (!isUuid(operatorId)) return 'viewer';
+  const [op, members] = await Promise.all([
+    getOperatorById(operatorId),
+    listOperatorMembers(operatorId),
+  ]);
+  return resolveOperatorRole(op?.contact_email ?? null, email, members);
+}
+
+/**
+ * Add a team member, or change an existing member's role. The operator's own
+ * contact_email is refused: it is always owner and does not belong in the list.
+ * Owner-gating is the caller's job.
+ */
+export async function addOperatorMember(
+  operatorId: string,
+  input: { email: string; role: OperatorRole },
+  invitedBy: string | null,
+): Promise<OperatorMember | null> {
+  if (!isUuid(operatorId)) return null;
+  const email = emailKey(input.email);
+  if (!email) return null;
+
+  const op = await getOperatorById(operatorId);
+  if (op && emailKey(op.contact_email) === email) {
+    // The contact is already owner; adding a row would be misleading. Treat as a
+    // no-op success so the UI does not error, but change nothing.
+    return null;
+  }
+
+  const existing = (await sbRequest<OperatorMember[]>(
+    `gt_operator_members?operator_id=eq.${operatorId}&email=eq.${encodeURIComponent(email)}&select=*&limit=1`,
+  ).catch(() => null))?.[0];
+
+  if (existing) {
+    const rows = await sbUpdate<OperatorMember>(
+      'gt_operator_members',
+      `id=eq.${existing.id}&operator_id=eq.${operatorId}`,
+      { role: input.role, updated_at: nowIso() },
+    );
+    return rows[0] ?? null;
+  }
+
+  const rows = await sbInsert<OperatorMember>('gt_operator_members', {
+    operator_id: operatorId, email, role: input.role, invited_by: invitedBy,
+  });
+  return rows[0] ?? null;
+}
+
+export async function setOperatorMemberRole(
+  memberId: string,
+  operatorId: string,
+  role: OperatorRole,
+): Promise<OperatorMember | null> {
+  if (!isUuid(memberId) || !isUuid(operatorId)) return null;
+  const rows = await sbUpdate<OperatorMember>(
+    'gt_operator_members',
+    `id=eq.${memberId}&operator_id=eq.${operatorId}`,
+    { role, updated_at: nowIso() },
+  );
+  return rows[0] ?? null;
+}
+
+export async function removeOperatorMember(memberId: string, operatorId: string): Promise<boolean> {
+  if (!isUuid(memberId) || !isUuid(operatorId)) return false;
+  await sbRequest(`gt_operator_members?id=eq.${memberId}&operator_id=eq.${operatorId}`, { method: 'DELETE' })
+    .catch(() => null);
+  return true;
 }
 
 // ---------------------------------------------------------------------------

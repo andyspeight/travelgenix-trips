@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
-import { requireOperator } from '@/lib/auth';
+import { requireEditor } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -31,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const body = (await request.json()) as HandleUploadBody;

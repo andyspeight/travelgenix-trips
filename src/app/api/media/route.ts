@@ -8,7 +8,7 @@
 // =============================================================================
 
 import { del } from '@vercel/blob';
-import { requireOperator } from '@/lib/auth';
+import { requireOperator, requireEditor } from '@/lib/auth';
 import { listMedia, recordMedia, deleteMediaOwned } from '@/lib/repo';
 import { safeMediaUrl, isVideoUrl } from '@/lib/url';
 
@@ -22,7 +22,7 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const body = (await request.json().catch(() => null)) as
@@ -45,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function DELETE(request: Request): Promise<Response> {
-  const ctx = await requireOperator();
+  const ctx = await requireEditor();
   if (!ctx) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const body = (await request.json().catch(() => null)) as { id?: string } | null;
