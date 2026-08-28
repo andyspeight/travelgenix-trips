@@ -24,7 +24,8 @@ import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument } from './types.ts';
+import { deleteDocument } from './storage.ts';
 import type { Session } from './auth.ts';
 
 const nowIso = () => new Date().toISOString();
@@ -415,6 +416,146 @@ export async function removeOption(
 }
 
 // ---------------------------------------------------------------------------
+//  Documents — passport / ID / insurance in the private bucket (P1). The write
+//  path is reachable by a traveller holding the booking reference (the same
+//  bearer token as /register); the read path is operator-gated. The file itself
+//  lives in storage.ts; these are only the database rows and the ownership
+//  checks that decide who may attach or read one.
+// ---------------------------------------------------------------------------
+
+/** What a document upload resolves to once the reference, field and traveller
+ *  are checked. Null from getDocumentTarget means "not allowed", so a forged
+ *  reference or a field that is not a document field can attach nothing. */
+export interface DocumentTarget {
+  bookingId: string;
+  operatorId: string;
+  tripId: string;
+  travellerId: string | null;
+  fieldKey: string;
+}
+
+/**
+ * Resolve and authorise a document upload. The reference must name a live
+ * booking, the field must be a real 'document' field on that trip's form, and a
+ * per-traveller document must name a traveller who actually belongs to the
+ * booking. A booking-wide document field takes no traveller.
+ */
+export async function getDocumentTarget(
+  reference: string,
+  fieldKey: string,
+  travellerId: string | null,
+): Promise<DocumentTarget | null> {
+  const ref = String(reference || '');
+  const key = String(fieldKey || '').replace(/[^a-z0-9_]/gi, '').slice(0, 24);
+  if (!ref || !key) return null;
+
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?reference=eq.${encodeURIComponent(ref)}` +
+      `&select=id,status,operator_id,departure:gt_departures(trip:gt_trips(id))&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+
+  const status = String(r.status);
+  if (status === 'expired' || status === 'cancelled') return null;
+
+  const operatorId = (r.operator_id as string) ?? '';
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const tripId = String(trip.id ?? '');
+  if (!isUuid(operatorId) || !isUuid(tripId)) return null;
+
+  const form = await formByTrip(tripId);
+  const field = form?.schema.find((f) => f.key === key && f.type === 'document');
+  if (!field) return null;
+
+  let resolvedTraveller: string | null = null;
+  if (field.scope === 'traveller') {
+    // A per-traveller document needs a traveller who belongs to THIS booking.
+    if (!isUuid(travellerId ?? '')) return null;
+    const owned = await sbRequest<Array<{ id: string }>>(
+      `gt_travellers?id=eq.${travellerId}&booking_id=eq.${r.id}&select=id&limit=1`,
+    ).catch(() => null);
+    if (!owned?.length) return null;
+    resolvedTraveller = String(travellerId);
+  }
+
+  return {
+    bookingId: String(r.id),
+    operatorId,
+    tripId,
+    travellerId: resolvedTraveller,
+    fieldKey: key,
+  };
+}
+
+/**
+ * Record an uploaded document, replacing any earlier one for the same field and
+ * traveller so a re-upload supersedes rather than piling up. The superseded
+ * file is removed from storage best-effort; a stray object in a private bucket
+ * is inert.
+ */
+export async function recordDocument(input: {
+  target: DocumentTarget;
+  filePath: string;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+}): Promise<TripDocument | null> {
+  const { target } = input;
+
+  const travellerFilter = target.travellerId
+    ? `traveller_id=eq.${target.travellerId}`
+    : 'traveller_id=is.null';
+  const prior = await sbRequest<TripDocument[]>(
+    `gt_documents?booking_id=eq.${target.bookingId}&field_key=eq.${encodeURIComponent(target.fieldKey)}&${travellerFilter}&select=*`,
+  ).catch(() => null);
+
+  const rows = await sbInsert<TripDocument>('gt_documents', {
+    operator_id: target.operatorId,
+    booking_id: target.bookingId,
+    trip_id: target.tripId,
+    traveller_id: target.travellerId,
+    field_key: target.fieldKey,
+    file_path: input.filePath,
+    file_name: input.fileName,
+    content_type: input.contentType,
+    size_bytes: input.sizeBytes,
+  });
+  const saved = rows[0] ?? null;
+  if (!saved) return null;
+
+  // Only now that the new row is in, drop the old ones and their objects.
+  for (const p of prior ?? []) {
+    if (p.id === saved.id) continue;
+    await sbRequest(`gt_documents?id=eq.${p.id}`, { method: 'DELETE' }).catch(() => null);
+    if (p.file_path && p.file_path !== saved.file_path) await deleteDocument(p.file_path);
+  }
+  return saved;
+}
+
+/** Every document on a booking, for completeness, the operator view, and the
+ *  register page's "already uploaded" state. */
+export async function listDocumentsForBooking(bookingId: string): Promise<TripDocument[]> {
+  if (!isUuid(bookingId)) return [];
+  return (
+    (await sbRequest<TripDocument[]>(
+      `gt_documents?booking_id=eq.${bookingId}&select=*&order=uploaded_at.desc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+/** One document, only if it belongs to this operator. The signed-URL view route
+ *  gates on this, so a guessed id cannot read another operator's document. */
+export async function getDocumentForOperator(documentId: string, operatorId: string): Promise<TripDocument | null> {
+  if (!isUuid(documentId)) return null;
+  const rows = await sbRequest<TripDocument[]>(
+    `gt_documents?id=eq.${documentId}&operator_id=eq.${operatorId}&select=*&limit=1`,
+  ).catch(() => null);
+  return rows?.[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
 //  Bookings — the read side (the console). Ownership is on operator_id, and
 //  traveller PII only ever leaves through these operator-gated reads.
 // ---------------------------------------------------------------------------
@@ -754,6 +895,9 @@ export interface RegistrationContext {
   /** Prefill and completion inputs, as plain arrays for the client boundary. */
   responses: Array<{ traveller_id: string | null; answers: Record<string, string> }>;
   signatures: Array<{ traveller_id: string | null }>;
+  /** Documents already uploaded, so the form shows "uploaded" and offers a
+   *  replace rather than pretending nothing is there. */
+  documents: Array<{ id: string; traveller_id: string | null; field_key: string; file_name: string }>;
 }
 
 /** Everything the registration page (and the operator manifest) needs, resolved
@@ -796,6 +940,11 @@ export async function getRegistrationContext(reference: string): Promise<Registr
       ).catch(() => null)) ?? []
     : [];
 
+  // Only fetch documents when the form actually asks for one, so a trip with no
+  // document fields does no extra work.
+  const hasDocFields = (form?.schema ?? []).some((f) => f.type === 'document');
+  const docs = hasDocFields ? await listDocumentsForBooking(bookingId) : [];
+
   return {
     booking: {
       id: bookingId,
@@ -815,6 +964,7 @@ export async function getRegistrationContext(reference: string): Promise<Registr
     waiver,
     responses,
     signatures,
+    documents: docs.map((d) => ({ id: d.id, traveller_id: d.traveller_id, field_key: d.field_key, file_name: d.file_name })),
   };
 }
 
@@ -901,6 +1051,7 @@ export interface BookingDetail {
   trip: { id: string; title: string } | null;
   packageName: string | null;
   selectedOptions: SelectedOption[];
+  documents: TripDocument[];
   registrationComplete: boolean;
 }
 
@@ -942,12 +1093,25 @@ export async function getBookingDetail(bookingId: string, operatorId: string): P
       ).catch(() => null)) ?? []
     : [];
 
+  const documents = await listDocumentsForBooking(bookingId);
+
   const travellerAnswers = new Map<string, Set<string>>();
   let bookingAnswers = new Set<string>();
   for (const r of responses) {
     const keys = new Set(Object.keys(r.answers ?? {}));
     if (r.traveller_id) travellerAnswers.set(r.traveller_id, keys);
     else bookingAnswers = keys;
+  }
+  // A present document satisfies its required document field exactly like an
+  // answered question, so its field key joins the answered set for that scope.
+  for (const d of documents) {
+    if (d.traveller_id) {
+      const set = travellerAnswers.get(d.traveller_id) ?? new Set<string>();
+      set.add(d.field_key);
+      travellerAnswers.set(d.traveller_id, set);
+    } else {
+      bookingAnswers.add(d.field_key);
+    }
   }
   const signedTravellerIds = new Set(signatures.map((s) => s.traveller_id).filter((x): x is string => !!x));
 
@@ -966,6 +1130,7 @@ export async function getBookingDetail(bookingId: string, operatorId: string): P
     signatures: signatures.map((s) => ({ ...s, version: waiver?.version ?? 1 })),
     trip, packageName,
     selectedOptions: asSelectedOptions((booking as unknown as Record<string, unknown>).selected_options),
+    documents,
     registrationComplete,
   };
 }

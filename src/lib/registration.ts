@@ -37,6 +37,7 @@ export const FIELD_TYPES: ReadonlyArray<{ type: RegFieldType; label: string; has
   { type: 'number', label: 'Number' },
   { type: 'select', label: 'Choose one', hasOptions: true },
   { type: 'checkbox', label: 'Tick box' },
+  { type: 'document', label: 'Document upload' },
 ];
 
 const VALID_TYPES = new Set<RegFieldType>(FIELD_TYPES.map((f) => f.type));
@@ -197,6 +198,11 @@ function cleanAnswers(fields: RegField[], scope: RegScope, raw: Record<string, u
   const out: Record<string, string> = {};
   for (const f of fields) {
     if (f.scope !== scope) continue;
+    // A document is not a text answer: it uploads out of band and is recorded
+    // as a gt_documents row. It never appears in this payload, and its required
+    // gate lives in completeness (a present document counts as answered), not in
+    // form validation. So skip it here rather than flagging it as missing.
+    if (f.type === 'document') continue;
     const res = cleanAnswer(f, raw?.[f.key]);
     if ('error' in res) errors[`${prefix}${f.key}`] = res.error;
     else if (res.value) out[f.key] = res.value;

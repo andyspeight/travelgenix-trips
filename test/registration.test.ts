@@ -151,3 +151,49 @@ test('isRegistrationComplete needs names, required answers and signatures', () =
   assert.equal(isRegistrationComplete({ ...base, travellers: [{ id: 'a', full_name: 'Ada' }, { id: 'b', full_name: '' }] }), false, 'a place unnamed');
   assert.equal(isRegistrationComplete({ ...base, travellerAnswers: new Map([['a', new Set(['q1'])], ['b', new Set()]]) }), false, 'a required answer missing');
 });
+
+// --- document fields --------------------------------------------------------
+
+test('sanitiseFormSchema keeps a document field and drops its junk options', () => {
+  const s = sanitiseFormSchema([
+    { key: 'q1', label: 'Passport', type: 'document', scope: 'traveller', required: true, options: ['ignored'] },
+  ]);
+  assert.equal(s.length, 1);
+  assert.equal(s[0]?.type, 'document');
+  assert.equal(s[0]?.required, true);
+  assert.equal(s[0]?.options, undefined, 'a document has no options');
+});
+
+test('a required document field does not fail form validation (uploaded out of band)', () => {
+  const schema: RegField[] = [
+    { key: 'q1', label: 'Passport', type: 'document', scope: 'traveller', required: true },
+    { key: 'q2', label: 'Group insurance', type: 'document', scope: 'booking', required: true },
+  ];
+  // No file in the payload, yet validation passes: documents are not answers.
+  const sub = {
+    travellers: [{ id: null, full_name: 'Ada Lovelace', answers: {}, signed: false, signed_name: '' }],
+    booking_answers: {},
+  };
+  const r = validateRegistration(schema, null, 1, sub);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(r.value.travellers[0]?.answers.q1, undefined, 'no phantom answer stored for a document');
+});
+
+test('a required document gates completeness once folded into the answered set', () => {
+  const schema: RegField[] = [
+    { key: 'q1', label: 'Passport', type: 'document', scope: 'traveller', required: true },
+    { key: 'q2', label: 'Insurance', type: 'document', scope: 'booking', required: true },
+  ];
+  const base = {
+    partySize: 1,
+    schema,
+    waiver: null,
+    travellers: [{ id: 'a', full_name: 'Ada' }],
+    travellerAnswers: new Map<string, Set<string>>([['a', new Set(['q1'])]]),
+    bookingAnswers: new Set(['q2']),
+    signedTravellerIds: new Set<string>(),
+  };
+  assert.equal(isRegistrationComplete(base), true, 'both documents present');
+  assert.equal(isRegistrationComplete({ ...base, travellerAnswers: new Map([['a', new Set<string>()]]) }), false, 'traveller passport missing');
+  assert.equal(isRegistrationComplete({ ...base, bookingAnswers: new Set<string>() }), false, 'booking insurance missing');
+});

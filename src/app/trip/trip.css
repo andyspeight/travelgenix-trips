@@ -381,6 +381,12 @@
 }
 .reg-sign-name:focus { outline: 2px solid var(--op-accent); outline-offset: 1px; border-color: transparent; }
 
+/* document upload field */
+.reg-doc { gap: 8px; }
+.reg-doc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.reg-doc-have { margin: 0; font-size: 13.5px; font-weight: 500; color: var(--op-accent); }
+.reg-doc-hint { margin: 0; font-size: 13.5px; color: var(--op-muted, #59626a); }
+
 /* booked-page call to action */
 .bk-reg-cta, .bk-reg-done { margin: 4px 0 18px; display: flex; flex-direction: column; gap: 12px; }
 .bk-reg-cta p, .bk-reg-done p { margin: 0; color: var(--op-ink-2, #3b434b); line-height: 1.5; }

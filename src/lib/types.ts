@@ -187,7 +187,7 @@ export interface Traveller {
  *  validate it. */
 export type RegFieldType =
   | 'short_text' | 'long_text' | 'email' | 'phone'
-  | 'date' | 'number' | 'select' | 'checkbox';
+  | 'date' | 'number' | 'select' | 'checkbox' | 'document';
 
 /** Whether a question is asked once for the whole booking (an emergency contact)
  *  or once per traveller (a dietary requirement). */
@@ -270,6 +270,25 @@ export interface TripMessage {
   segment: { status?: string; room?: string };
   recipient_count: number;
   created_at: string;
+}
+
+/** A traveller document (passport, ID, insurance) held in the private bucket.
+ *  Never carries a URL: the file is reached only through a short-lived signed
+ *  URL minted server-side behind an operator ownership check. `traveller_id`
+ *  is null for a booking-wide document. `field_key` ties it to the registration
+ *  field it satisfies. */
+export interface TripDocument {
+  id: string;
+  operator_id: string;
+  booking_id: string;
+  trip_id: string;
+  traveller_id: string | null;
+  field_key: string;
+  file_path: string;
+  file_name: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  uploaded_at: string;
 }
 
 export type WaitlistStatus = 'waiting' | 'invited' | 'converted' | 'removed';

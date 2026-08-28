@@ -36,17 +36,19 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
   const detail = await getBookingDetail(id, operator.id);
   if (!detail) notFound();
 
-  const { booking, form, waiver, responses, signatures, trip, packageName, selectedOptions, registrationComplete } = detail;
+  const { booking, form, waiver, responses, signatures, trip, packageName, selectedOptions, documents, registrationComplete } = detail;
 
   // Field key -> label, so an answer reads as a question rather than a code.
   const labels = new Map<string, RegField>((form?.schema ?? []).map((f) => [f.key, f]));
   const answersFor = (travellerId: string | null): Record<string, string> =>
     responses.find((r) => r.traveller_id === travellerId)?.answers ?? {};
   const signatureFor = (travellerId: string) => signatures.find((s) => s.traveller_id === travellerId);
+  const documentsFor = (travellerId: string | null) => documents.filter((d) => d.traveller_id === travellerId);
 
   const perTravellerFields = (form?.schema ?? []).filter((f) => f.scope === 'traveller');
   const perBookingFields = (form?.schema ?? []).filter((f) => f.scope === 'booking');
   const bookingAnswers = answersFor(null);
+  const bookingDocs = documentsFor(null);
 
   return (
     <>
@@ -118,8 +120,14 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
                   {t.email && <div><dt>Email</dt><dd>{t.email}</dd></div>}
                   {t.phone && <div><dt>Phone</dt><dd>{t.phone}</dd></div>}
                   {t.date_of_birth && <div><dt>Date of birth</dt><dd>{humanDate(t.date_of_birth)}</dd></div>}
-                  {perTravellerFields.map((f) => ans[f.key] != null && ans[f.key] !== '' && (
+                  {perTravellerFields.filter((f) => f.type !== 'document').map((f) => ans[f.key] != null && ans[f.key] !== '' && (
                     <div key={f.key}><dt>{labels.get(f.key)?.label ?? f.key}</dt><dd>{ans[f.key]}</dd></div>
+                  ))}
+                  {documentsFor(t.id).map((d) => (
+                    <div key={d.id}>
+                      <dt>{labels.get(d.field_key)?.label ?? 'Document'}</dt>
+                      <dd><a href={`/api/console/document/${d.id}`} target="_blank" rel="noreferrer">{d.file_name}</a></dd>
+                    </div>
                   ))}
                   {sig && <div><dt>Signed as</dt><dd>{sig.signed_name} <span className="c-faint">(v{sig.version})</span></dd></div>}
                 </dl>
@@ -129,18 +137,32 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
         </ul>
       )}
 
-      {perBookingFields.length > 0 && (
+      {perBookingFields.some((f) => f.type !== 'document') && (
         <>
           <h2>Booking answers</h2>
           {Object.keys(bookingAnswers).length === 0 ? (
             <p className="c-empty">Not answered yet.</p>
           ) : (
             <dl className="c-facts">
-              {perBookingFields.map((f) => bookingAnswers[f.key] != null && bookingAnswers[f.key] !== '' && (
+              {perBookingFields.filter((f) => f.type !== 'document').map((f) => bookingAnswers[f.key] != null && bookingAnswers[f.key] !== '' && (
                 <div key={f.key}><dt>{f.label}</dt><dd>{bookingAnswers[f.key]}</dd></div>
               ))}
             </dl>
           )}
+        </>
+      )}
+
+      {bookingDocs.length > 0 && (
+        <>
+          <h2>Booking documents</h2>
+          <dl className="c-facts">
+            {bookingDocs.map((d) => (
+              <div key={d.id}>
+                <dt>{labels.get(d.field_key)?.label ?? 'Document'}</dt>
+                <dd><a href={`/api/console/document/${d.id}`} target="_blank" rel="noreferrer">{d.file_name}</a></dd>
+              </div>
+            ))}
+          </dl>
         </>
       )}
     </>

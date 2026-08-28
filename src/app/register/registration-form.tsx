@@ -13,7 +13,7 @@
 //  JSON payload; lib/registration.ts is the authority that validates it.
 // =============================================================================
 
-import { useActionState, useState } from 'react';
+import { useActionState, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { submitRegistrationAction } from '../console/actions';
 import { EMPTY_STATE } from '@/lib/action-state';
@@ -24,6 +24,87 @@ export interface SlotPrefill {
   full_name: string; email: string; phone: string; date_of_birth: string;
   answers: Record<string, string>;
   signed: boolean; signed_name: string;
+}
+
+export interface DocPrefill {
+  id: string;
+  traveller_id: string | null;
+  field_key: string;
+  file_name: string;
+}
+
+// Files the bucket accepts, mirrored for a friendly client-side reject before a
+// doomed upload. The server and the bucket are the real authority.
+const DOC_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf';
+const DOC_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * One document upload. Uploads immediately on choosing a file, out of band from
+ * the main form: the file never rides the registration JSON payload. Shows what
+ * is already there and offers a replace. A per-traveller document needs a saved
+ * traveller, so an unnamed slot is told to save first.
+ */
+function DocumentField({
+  reference, field, travellerId, initialName,
+}: {
+  reference: string; field: RegField; travellerId: string | null; initialName: string | null;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [name, setName] = useState<string | null>(initialName);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const needsTraveller = field.scope === 'traveller' && !travellerId;
+
+  async function onPick(file: File) {
+    setError(null);
+    if (file.size > DOC_MAX_BYTES) { setError('That file is over the 5 MB limit.'); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('reference', reference);
+      fd.append('field_key', field.key);
+      if (travellerId) fd.append('traveller_id', travellerId);
+      const res = await fetch('/api/register/document', { method: 'POST', body: fd });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.ok) {
+        setError((body && body.message) || 'The upload did not work. Please try again.');
+      } else {
+        setName(body.document?.file_name ?? file.name);
+      }
+    } catch {
+      setError('The upload did not work. Please try again.');
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  return (
+    <div className="bk-field reg-doc">
+      <span>{field.label}{field.required && <em className="reg-req"> *</em>}</span>
+      {field.help && <span className="bk-hint" style={{ margin: 0 }}>{field.help}</span>}
+
+      {needsTraveller ? (
+        <p className="reg-doc-hint">Add this traveller’s name and save first, then come back to upload their document.</p>
+      ) : (
+        <>
+          {name && <p className="reg-doc-have">✓ {name} uploaded</p>}
+          <div className="reg-doc-row">
+            <button type="button" className="bk-promo-apply" disabled={busy}
+              onClick={() => inputRef.current?.click()}>
+              {busy ? 'Uploading...' : name ? 'Replace' : 'Upload'}
+            </button>
+            <span className="bk-hint" style={{ margin: 0 }}>Photo or PDF, up to 5 MB.</span>
+          </div>
+          <input ref={inputRef} type="file" accept={DOC_ACCEPT} hidden
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void onPick(f); }} />
+        </>
+      )}
+      {error && <p className="bk-err">{error}</p>}
+    </div>
+  );
 }
 
 interface WaiverView { title: string; body: string; is_mandatory: boolean; version: number }
@@ -80,7 +161,7 @@ function Paragraphs({ body }: { body: string }) {
 }
 
 export function RegistrationForm({
-  reference, partySize, slots: initialSlots, schema, waiver, bookingAnswers: initialBooking,
+  reference, partySize, slots: initialSlots, schema, waiver, bookingAnswers: initialBooking, documents = [],
 }: {
   reference: string;
   partySize: number;
@@ -88,8 +169,13 @@ export function RegistrationForm({
   schema: RegField[];
   waiver: WaiverView | null;
   bookingAnswers: Record<string, string>;
+  documents?: DocPrefill[];
 }) {
   const [state, action] = useActionState(submitRegistrationAction, EMPTY_STATE);
+
+  // Look up an already-uploaded document by traveller (or booking) and field.
+  const docName = (travellerId: string | null, fieldKey: string): string | null =>
+    documents.find((d) => d.traveller_id === travellerId && d.field_key === fieldKey)?.file_name ?? null;
 
   const [slots, setSlots] = useState<SlotPrefill[]>(() =>
     Array.from({ length: partySize }, (_, i) => initialSlots[i] ?? {
@@ -145,9 +231,14 @@ export function RegistrationForm({
           </label>
 
           {perTraveller.map((f) => (
-            <Field key={f.key} field={f} id={`t${i}_${f.key}`}
-              value={s.answers[f.key] ?? ''} onChange={(v) => setAnswer(i, f.key, v)}
-              error={e[`t${i}.${f.key}`]} />
+            f.type === 'document' ? (
+              <DocumentField key={f.key} reference={reference} field={f}
+                travellerId={s.id} initialName={docName(s.id, f.key)} />
+            ) : (
+              <Field key={f.key} field={f} id={`t${i}_${f.key}`}
+                value={s.answers[f.key] ?? ''} onChange={(v) => setAnswer(i, f.key, v)}
+                error={e[`t${i}.${f.key}`]} />
+            )
           ))}
         </div>
       ))}
@@ -156,9 +247,14 @@ export function RegistrationForm({
         <div className="bk-section">
           <h2>About your booking</h2>
           {perBooking.map((f) => (
-            <Field key={f.key} field={f} id={`b_${f.key}`}
-              value={booking[f.key] ?? ''} onChange={(v) => setBooking((prev) => ({ ...prev, [f.key]: v }))}
-              error={e[`booking.${f.key}`]} />
+            f.type === 'document' ? (
+              <DocumentField key={f.key} reference={reference} field={f}
+                travellerId={null} initialName={docName(null, f.key)} />
+            ) : (
+              <Field key={f.key} field={f} id={`b_${f.key}`}
+                value={booking[f.key] ?? ''} onChange={(v) => setBooking((prev) => ({ ...prev, [f.key]: v }))}
+                error={e[`booking.${f.key}`]} />
+            )
           ))}
         </div>
       )}

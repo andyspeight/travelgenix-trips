@@ -91,6 +91,7 @@ export default async function RegisterPage({ params }: { params: Promise<{ refer
               schema={ctx.form?.schema ?? []}
               waiver={ctx.waiver ? { title: ctx.waiver.title, body: ctx.waiver.body, is_mandatory: ctx.waiver.is_mandatory, version: ctx.waiver.version } : null}
               bookingAnswers={bookingAnswers}
+              documents={ctx.documents}
             />
           )}
         </div>
