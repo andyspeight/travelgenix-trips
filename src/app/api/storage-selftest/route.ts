@@ -15,12 +15,14 @@ export async function GET(request: Request): Promise<Response> {
   if (!host.endsWith('.vercel.app')) return new Response('not found', { status: 404 });
   if (!storageConfigured()) return Response.json({ ok: false, step: 'configured' });
 
-  const path = `_selftest/${globalThis.crypto.randomUUID()}.txt`;
-  const marker = `selftest-${Date.now()}`;
+  const path = `_selftest/${globalThis.crypto.randomUUID()}.pdf`;
+  const marker = `%PDF-1.4 selftest-${Date.now()}`;
   const steps: Record<string, unknown> = {};
 
   try {
-    await uploadDocument(path, new TextEncoder().encode(marker).buffer as ArrayBuffer, 'text/plain');
+    // application/pdf is on the bucket's allow-list; a disallowed type (e.g.
+    // text/plain) is correctly rejected 415, which we confirmed separately.
+    await uploadDocument(path, new TextEncoder().encode(marker).buffer as ArrayBuffer, 'application/pdf');
     steps.uploaded = true;
   } catch (err) {
     return Response.json({ ok: false, step: 'upload', error: String(err instanceof Error ? err.message : err) });
