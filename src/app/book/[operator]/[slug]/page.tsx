@@ -10,6 +10,7 @@ import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { BrandMast, PoweredBy } from '@/lib/brand-ui';
+import { operatorMetadata } from '@/lib/seo';
 import { BookingForm } from '../../form';
 import { WaitlistForm } from '../../waitlist-form';
 
@@ -18,7 +19,18 @@ export const dynamic = 'force-dynamic';
 interface Params { operator: string; slug: string }
 interface Search { departure?: string }
 
-export const metadata: Metadata = { title: 'Book your place' };
+export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
+  const { operator, slug } = await params;
+  if (!tripsDbConfigured()) return { title: 'Book your place' };
+  const found = await getPublishedTrip(operator, slug);
+  if (!found) return { title: 'Book your place' };
+  return operatorMetadata({
+    title: `Book ${found.trip.title} · ${found.operator.name}`,
+    description: `Book your place on ${found.trip.title} with ${found.operator.name}.`,
+    operatorName: found.operator.name,
+    logoUrl: found.operator.brand?.logoUrl,
+  });
+}
 
 export default async function BookPage({
   params, searchParams,

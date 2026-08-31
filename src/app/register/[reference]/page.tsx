@@ -10,17 +10,30 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getRegistrationContext, getOperatorById } from '@/lib/repo';
+import { getRegistrationContext, getOperatorById, getOperatorBrandByReference } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { BrandMast, PoweredBy } from '@/lib/brand-ui';
+import { operatorMetadata } from '@/lib/seo';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { RegistrationForm, type SlotPrefill } from '../registration-form';
 import type { Operator } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Complete your booking' };
+
+export async function generateMetadata({ params }: { params: Promise<{ reference: string }> }): Promise<Metadata> {
+  if (!tripsDbConfigured()) return { title: 'Complete your booking' };
+  const { reference } = await params;
+  const b = await getOperatorBrandByReference(normaliseReference(reference) || reference);
+  if (!b) return { title: 'Complete your booking' };
+  return operatorMetadata({
+    title: `Complete your booking · ${b.operatorName}`,
+    description: `Add your details to complete your booking with ${b.operatorName}.`,
+    operatorName: b.operatorName,
+    logoUrl: b.logoUrl,
+  });
+}
 
 export default async function RegisterPage({ params }: { params: Promise<{ reference: string }> }) {
   const { reference } = await params;

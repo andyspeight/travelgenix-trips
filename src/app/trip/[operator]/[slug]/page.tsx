@@ -11,6 +11,7 @@ import { notFound } from 'next/navigation';
 import { getPublishedTrip, listOpenDepartures, listPackages, getApprovedReviews } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
 import { isVideoUrl } from '@/lib/url';
+import { operatorMetadata } from '@/lib/seo';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { TripView } from '../../trip-view';
 
@@ -23,15 +24,13 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!tripsDbConfigured()) return {};
   const found = await getPublishedTrip(operator, slug);
   if (!found) return {};
-  return {
+  return operatorMetadata({
     title: `${found.trip.title} · ${found.operator.name}`,
-    description: found.trip.summary ?? undefined,
-    openGraph: {
-      title: found.trip.title,
-      description: found.trip.summary ?? undefined,
-      images: found.trip.hero_image_url && !isVideoUrl(found.trip.hero_image_url) ? [found.trip.hero_image_url] : undefined,
-    },
-  };
+    description: found.trip.summary,
+    operatorName: found.operator.name,
+    logoUrl: found.operator.brand?.logoUrl,
+    image: found.trip.hero_image_url && !isVideoUrl(found.trip.hero_image_url) ? found.trip.hero_image_url : null,
+  });
 }
 
 export default async function TripPage({ params }: { params: Promise<Params> }) {

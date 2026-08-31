@@ -1086,6 +1086,25 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
   };
 }
 
+/** Just the operator name and logo for a booking reference, for page metadata on
+ *  the reference-gated pages (registration, review, confirmation). Light on
+ *  purpose — a full confirmation is not needed to title a tab. */
+export async function getOperatorBrandByReference(
+  reference: string,
+): Promise<{ operatorName: string; logoUrl: string | null } | null> {
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
+      `&select=departure:gt_departures(trip:gt_trips(operator:gt_operators(name,brand)))&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const brand = (op.brand ?? null) as OperatorBrand | null;
+  return { operatorName: String(op.name ?? 'Your trip'), logoUrl: brand?.logoUrl ?? null };
+}
+
 /** Coerce the booking's selected_options jsonb into typed rows, defensively:
  *  a legacy booking has '[]', and a hand-edited row must never crash a render. */
 function asSelectedOptions(raw: unknown): SelectedOption[] {
@@ -1665,6 +1684,9 @@ export interface ReminderBooking {
   trip_title: string;
   operator_name: string;
   operator_reply_to: string | null;
+  operator_logo_url: string | null;
+  operator_accent: string | null;
+  operator_hide_powered_by: boolean;
 }
 
 /** Bookings that booked but may not have finished, due a one-time nudge: still
@@ -1679,7 +1701,7 @@ export async function findBookingsToRemind(limit = 50): Promise<ReminderBooking[
       `&created_at=lte.${twoDaysAgo}&created_at=gte.${fourteenDaysAgo}` +
       `&traveller_email=not.is.null` +
       `&select=id,reference,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,` +
-      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name,brand)))` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name,brand,hide_powered_by)))` +
       `&order=created_at.asc&limit=${limit}`,
   ).catch(() => null);
 
@@ -1702,6 +1724,9 @@ export async function findBookingsToRemind(limit = 50): Promise<ReminderBooking[
       trip_title: String(trip.title ?? 'your trip'),
       operator_name: String(op.name ?? 'the operator'),
       operator_reply_to: brand?.replyTo ?? null,
+      operator_logo_url: brand?.logoUrl ?? null,
+      operator_accent: brand?.primaryColour ?? null,
+      operator_hide_powered_by: Boolean(op.hide_powered_by),
     };
   });
 }
@@ -1734,7 +1759,7 @@ export async function findAbandonedBookings(limit = 50): Promise<AbandonedBookin
       `&hold_expires_at=lt.${nowIsoStr}&created_at=gte.${windowAgo}` +
       `&traveller_email=not.is.null` +
       `&select=id,reference,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,` +
-      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,slug,operator:gt_operators(name,slug,brand)))` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,slug,operator:gt_operators(name,slug,brand,hide_powered_by)))` +
       `&order=created_at.asc&limit=${limit}`,
   ).catch(() => null);
 
@@ -1757,6 +1782,9 @@ export async function findAbandonedBookings(limit = 50): Promise<AbandonedBookin
       trip_title: String(trip.title ?? 'your trip'),
       operator_name: String(op.name ?? 'the operator'),
       operator_reply_to: brand?.replyTo ?? null,
+      operator_logo_url: brand?.logoUrl ?? null,
+      operator_accent: brand?.primaryColour ?? null,
+      operator_hide_powered_by: Boolean(op.hide_powered_by),
       operator_slug: String(op.slug ?? ''),
       trip_slug: String(trip.slug ?? ''),
     };

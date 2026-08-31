@@ -17,6 +17,10 @@
 
 import 'server-only';
 import { format as money } from './money.ts';
+import {
+  renderBrandedEmail, emailP, emailFacts, emailButton, safeHex,
+  type EmailBrand,
+} from './email-template.ts';
 
 // Where the traveller-facing pages live, for links inside emails. The custom
 // domain by default; overridable for other hosts.
@@ -26,9 +30,15 @@ export interface EmailMessage {
   to: string;
   replyTo?: string;
   subject: string;
-  /** Plain text. Real HTML templating is a provider-time concern, not a hold
-   *  -time one; the confirmation content is deliberately simple and correct. */
+  /** Plain text, always sent as the fallback for clients that do not render
+   *  HTML, and the whole message when no html is supplied. */
   body: string;
+  /** The branded HTML body, when there is one. */
+  html?: string;
+  /** The sender NAME shown in the inbox. The operator's name, so the email looks
+   *  like it came from them, not from Travelgenix. The from ADDRESS stays the
+   *  one verified sending domain (a custom sending domain needs DNS). */
+  senderName?: string;
 }
 
 export type EmailTransport = (msg: EmailMessage) => Promise<{ ok: boolean; detail: string }>;
@@ -58,10 +68,11 @@ const brevoTransport: EmailTransport = async (msg) => {
       method: 'POST',
       headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
-        sender: { email: FROM_EMAIL, name: FROM_NAME },
+        sender: { email: FROM_EMAIL, name: msg.senderName || FROM_NAME },
         to: [{ email: msg.to }],
         replyTo: msg.replyTo ? { email: msg.replyTo } : undefined,
         subject: msg.subject,
+        htmlContent: msg.html || undefined,
         textContent: msg.body,
       }),
       signal: ctrl.signal,
@@ -95,6 +106,9 @@ export interface BookingEmailContext {
   tripTitle: string;
   operatorName: string;
   operatorReplyTo?: string | null;
+  operatorLogoUrl?: string | null;
+  operatorAccent?: string | null;
+  operatorHidePoweredBy?: boolean;
   startsOn: string;
   endsOn: string;
   partySize: number;
@@ -104,6 +118,16 @@ export interface BookingEmailContext {
   totalPence: number | null;
   depositPence: number | null;
   holdExpiresAt: string | null;
+}
+
+/** The brand furniture for one operator's emails, from a booking context. */
+function brandOf(ctx: BookingEmailContext): EmailBrand {
+  return {
+    operatorName: ctx.operatorName,
+    logoUrl: ctx.operatorLogoUrl ?? null,
+    accent: ctx.operatorAccent ?? null,
+    hidePoweredBy: Boolean(ctx.operatorHidePoweredBy),
+  };
 }
 
 /**
@@ -141,11 +165,34 @@ export async function sendTravellerConfirmation(ctx: BookingEmailContext): Promi
     ctx.operatorName,
   ].filter((l) => l !== null);
 
+  const brand = brandOf(ctx);
+  const accent = safeHex(ctx.operatorAccent);
+  const html = renderBrandedEmail(brand, {
+    previewText: `Your reference is ${ctx.reference}`,
+    contentHtml:
+      emailP(`Hi ${firstName(ctx.leadName)},`) +
+      emailP(`Thank you for booking ${ctx.tripTitle} with ${ctx.operatorName}. Your reference is ${ctx.reference} — keep it handy, it is how we find your booking.`) +
+      emailFacts([
+        ['Trip', ctx.tripTitle],
+        ['Dates', dates],
+        ['Travelling', `${ctx.partySize} ${ctx.partySize === 1 ? 'person' : 'people'}`],
+        ['Total', total || ''],
+        ['Deposit', deposit ? `${deposit} to secure your place` : ''],
+      ]) +
+      emailP(ctx.holdExpiresAt
+        ? `We are holding your place until ${humanDateTime(ctx.holdExpiresAt)}. ${ctx.operatorName} will be in touch to take payment and confirm.`
+        : `${ctx.operatorName} will be in touch shortly to confirm your booking and arrange payment.`) +
+      emailButton('Complete your booking', `${PUBLIC_ORIGIN}/register/${ctx.reference}`, accent) +
+      emailP(`See you soon, ${ctx.operatorName}`),
+  });
+
   return safeSend({
     to: ctx.leadEmail,
     replyTo: ctx.operatorReplyTo ?? undefined,
+    senderName: ctx.operatorName,
     subject: `Your booking with ${ctx.operatorName}, reference ${ctx.reference}`,
     body: lines.join('\n'),
+    html,
   });
 }
 
@@ -164,10 +211,25 @@ export async function sendOperatorNotice(ctx: BookingEmailContext, operatorEmail
     `It is in your console now.`,
   ].join('\n');
 
+  const html = renderBrandedEmail(brandOf(ctx), {
+    previewText: `${ctx.leadName} booked ${ctx.tripTitle}`,
+    contentHtml:
+      emailP(`New booking on ${ctx.tripTitle}.`) +
+      emailFacts([
+        ['Reference', ctx.reference],
+        ['Lead', `${ctx.leadName} (${ctx.leadEmail})`],
+        ['Dates', dates],
+        ['Party', String(ctx.partySize)],
+      ]) +
+      emailP('It is in your console now.'),
+  });
+
   return safeSend({
     to: operatorEmail,
+    senderName: ctx.operatorName,
     subject: `New booking: ${ctx.tripTitle}, ${ctx.reference}`,
     body,
+    html,
   });
 }
 
@@ -188,11 +250,23 @@ export async function sendRegistrationReminder(ctx: BookingEmailContext): Promis
     ctx.operatorName,
   ].join('\n');
 
+  const html = renderBrandedEmail(brandOf(ctx), {
+    previewText: `Finish your ${ctx.tripTitle} booking`,
+    contentHtml:
+      emailP(`Hi ${firstName(ctx.leadName)},`) +
+      emailP(`A quick reminder about your booking of ${ctx.tripTitle} with ${ctx.operatorName}. Your reference is ${ctx.reference}.`) +
+      emailP(`Please add each traveller's details and complete anything ${ctx.operatorName} needs:`) +
+      emailButton('Complete your booking', `${PUBLIC_ORIGIN}/register/${ctx.reference}`, safeHex(ctx.operatorAccent)) +
+      emailP(`Thanks, ${ctx.operatorName}`),
+  });
+
   return safeSend({
     to: ctx.leadEmail,
     replyTo: ctx.operatorReplyTo ?? undefined,
+    senderName: ctx.operatorName,
     subject: `A quick reminder about your ${ctx.tripTitle} booking`,
     body,
+    html,
   });
 }
 
@@ -221,11 +295,24 @@ export async function sendAbandonedRecovery(
     ctx.operatorName,
   ].join('\n');
 
+  const html = renderBrandedEmail(brandOf(ctx), {
+    previewText: `Your ${ctx.tripTitle} places are no longer held`,
+    contentHtml:
+      emailP(`Hi ${firstName(ctx.leadName)},`) +
+      emailP(`You started booking ${ctx.tripTitle} with ${ctx.operatorName} but did not finish, so your places are no longer being held.`) +
+      emailP('If you would still like to travel, you can pick up where you left off:') +
+      emailButton(`Book ${ctx.tripTitle}`, bookLink, safeHex(ctx.operatorAccent)) +
+      emailP('Places can go quickly, so it is worth booking soon. If you have any questions, just reply to this email.') +
+      emailP(`Hope to see you on the trip, ${ctx.operatorName}`),
+  });
+
   return safeSend({
     to: ctx.leadEmail,
     replyTo: ctx.operatorReplyTo ?? undefined,
+    senderName: ctx.operatorName,
     subject: `Still thinking about ${ctx.tripTitle}?`,
     body,
+    html,
   });
 }
 

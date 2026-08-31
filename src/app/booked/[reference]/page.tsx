@@ -8,17 +8,30 @@
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getConfirmation, getChecklist } from '@/lib/repo';
+import { getConfirmation, getChecklist, getOperatorBrandByReference } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { format as money } from '@/lib/money';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { BrandMast, PoweredBy } from '@/lib/brand-ui';
+import { operatorMetadata } from '@/lib/seo';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { Checklist } from '../checklist';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Booking confirmed' };
+
+export async function generateMetadata({ params }: { params: Promise<{ reference: string }> }): Promise<Metadata> {
+  if (!tripsDbConfigured()) return { title: 'Booking confirmed' };
+  const { reference } = await params;
+  const b = await getOperatorBrandByReference(normaliseReference(reference) || reference);
+  if (!b) return { title: 'Booking confirmed' };
+  return operatorMetadata({
+    title: `Booking confirmed · ${b.operatorName}`,
+    description: `Your booking with ${b.operatorName}.`,
+    operatorName: b.operatorName,
+    logoUrl: b.logoUrl,
+  });
+}
 
 export default async function BookedPage({
   params, searchParams,

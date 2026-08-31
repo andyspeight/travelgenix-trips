@@ -10,17 +10,30 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getReviewContext, getOperatorById } from '@/lib/repo';
+import { getReviewContext, getOperatorById, getOperatorBrandByReference } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { BrandMast, PoweredBy } from '@/lib/brand-ui';
+import { operatorMetadata } from '@/lib/seo';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { ReviewForm } from '../review-form';
 import type { Operator } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Leave a review' };
+
+export async function generateMetadata({ params }: { params: Promise<{ reference: string }> }): Promise<Metadata> {
+  if (!tripsDbConfigured()) return { title: 'Leave a review' };
+  const { reference } = await params;
+  const b = await getOperatorBrandByReference(normaliseReference(reference) || reference);
+  if (!b) return { title: 'Leave a review' };
+  return operatorMetadata({
+    title: `Leave a review · ${b.operatorName}`,
+    description: `Share how your trip with ${b.operatorName} went.`,
+    operatorName: b.operatorName,
+    logoUrl: b.logoUrl,
+  });
+}
 
 export default async function ReviewPage({ params }: { params: Promise<{ reference: string }> }) {
   const { reference } = await params;
