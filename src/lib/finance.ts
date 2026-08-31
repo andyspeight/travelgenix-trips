@@ -48,6 +48,29 @@ export function poundsAmount(pence: number): string {
   return (Math.round(pence) / 100).toFixed(2);
 }
 
+/** One booking as the /api/v1/bookings JSON object. Pence integers (not decimal
+ *  strings — JSON consumers want numbers), with collected / outstanding computed
+ *  by the same rules as the CSV and the screen, so the API reconciles too. */
+export function bookingJson(r: BookingFinanceRow): Record<string, unknown> {
+  return {
+    reference: r.reference,
+    trip: r.trip,
+    booked_by: r.buyer,
+    email: r.email,
+    dates: r.dates,
+    travellers: r.party,
+    room: r.room || null,
+    promo: r.promo || null,
+    status: r.status,
+    currency: r.currency,
+    total_pence: r.total_pence,
+    deposit_pence: r.deposit_pence,
+    collected_pence: bookingCollected(r.status, r.total_pence, r.deposit_pence),
+    outstanding_pence: bookingOutstanding(r.status, r.total_pence, r.deposit_pence),
+    booked_on: r.booked_on,
+  };
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Held', deposit_paid: 'Deposit paid', paid: 'Paid in full',
   cancelled: 'Cancelled', expired: 'Expired',

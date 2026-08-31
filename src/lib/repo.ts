@@ -27,7 +27,8 @@ import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem, Webhook } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem, Webhook, ApiKey } from './types.ts';
+import { hashApiKey, keyPrefix } from './apikeys.ts';
 import { deleteDocument } from './storage.ts';
 import { resolveOperatorRole, emailKey } from './members.ts';
 import type { Session } from './auth.ts';
@@ -2054,6 +2055,44 @@ export async function listOperatorBookingsForExport(operatorId: string): Promise
   });
 }
 
+/** One of an operator's bookings by reference, in the same shape as the export
+ *  and the /api/v1/bookings list. Scoped by operator_id, so a reference that
+ *  belongs to another operator returns null. */
+export async function getApiBookingByReference(
+  operatorId: string,
+  reference: string,
+): Promise<BookingFinanceRow | null> {
+  if (!isUuid(operatorId)) return null;
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?operator_id=eq.${operatorId}&reference=eq.${encodeURIComponent(reference)}` +
+      `&select=reference,status,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,created_at,` +
+      `package:gt_packages(name),promo:gt_promo_codes(code),` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title))&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const pkg = (r.package ?? null) as Record<string, unknown> | null;
+  const promo = (r.promo ?? null) as Record<string, unknown> | null;
+  const starts = (dep.starts_on as string) ?? '';
+  return {
+    reference: String(r.reference ?? ''),
+    trip: String(trip.title ?? ''),
+    buyer: (r.traveller_name as string) ?? '',
+    email: (r.traveller_email as string) ?? '',
+    dates: starts ? shortRange(starts, (dep.ends_on as string) ?? null) : '',
+    party: Number(r.party_size ?? 0),
+    room: pkg?.name ? String(pkg.name) : '',
+    promo: promo?.code ? String(promo.code) : '',
+    status: String(r.status),
+    currency: String(r.currency ?? 'gbp'),
+    total_pence: (r.total_pence as number) ?? 0,
+    deposit_pence: (r.deposit_pence as number) ?? 0,
+    booked_on: String(r.created_at ?? '').slice(0, 10),
+  };
+}
+
 // ---------------------------------------------------------------------------
 //  Webhooks (integrations, gap 10). All scoped by operator_id so one operator
 //  can never see or touch another's endpoints. The secret is stored so we can
@@ -2131,6 +2170,73 @@ export async function deleteWebhook(operatorId: string, id: string): Promise<voi
 export async function recordWebhookResult(id: string, status: number): Promise<void> {
   if (!isUuid(id)) return;
   await sbUpdate('gt_webhooks', `id=eq.${id}`, { last_status: status, last_at: nowIso() }).catch(() => []);
+}
+
+// ---------------------------------------------------------------------------
+//  API keys (integrations, gap 10). Only the hash is stored; the key is shown
+//  once by the caller. Auth looks a key up by its hash, scoped to nothing —
+//  the hash IS the identity — then returns the owning operator.
+// ---------------------------------------------------------------------------
+
+function mapApiKey(r: Record<string, unknown>): ApiKey {
+  return {
+    id: String(r.id),
+    operator_id: String(r.operator_id),
+    key_prefix: String(r.key_prefix ?? ''),
+    name: (r.name as string) ?? null,
+    last_used_at: (r.last_used_at as string) ?? null,
+    revoked_at: (r.revoked_at as string) ?? null,
+    created_at: String(r.created_at ?? ''),
+  };
+}
+
+/** An operator's keys, newest first. Never returns the key or its hash — a list
+ *  view only needs the prefix, name and usage. */
+export async function listApiKeys(operatorId: string): Promise<ApiKey[]> {
+  if (!isUuid(operatorId)) return [];
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_api_keys?operator_id=eq.${operatorId}&select=id,operator_id,key_prefix,name,last_used_at,revoked_at,created_at&order=created_at.desc`,
+  ).catch(() => null);
+  return (rows ?? []).map(mapApiKey);
+}
+
+/** Mint and store a key. The caller passes the freshly-minted key so it can show
+ *  it once; we persist only its hash and visible prefix. Returns the stored row. */
+export async function createApiKey(operatorId: string, key: string, name: string | null): Promise<ApiKey | null> {
+  if (!isUuid(operatorId)) return null;
+  const rows = await sbInsert<Record<string, unknown>>('gt_api_keys', {
+    operator_id: operatorId,
+    key_hash: hashApiKey(key),
+    key_prefix: keyPrefix(key),
+    name: name || null,
+  }).catch(() => []);
+  return rows[0] ? mapApiKey(rows[0]) : null;
+}
+
+/** Turn a key off for good. Scoped by operator_id, so a forged id is a no-op.
+ *  Revoke rather than delete, to keep the audit row and the last-used time. */
+export async function revokeApiKey(operatorId: string, id: string): Promise<boolean> {
+  if (!isUuid(operatorId) || !isUuid(id)) return false;
+  const rows = await sbUpdate('gt_api_keys', `id=eq.${id}&operator_id=eq.${operatorId}&revoked_at=is.null`, {
+    revoked_at: nowIso(),
+  }).catch(() => []);
+  return rows.length > 0;
+}
+
+/** Authenticate a bearer key: find the operator it belongs to, or null. Only a
+ *  non-revoked key authenticates. Touches last_used_at best-effort so the
+ *  operator can see the key is live. The lookup is by hash — we never store or
+ *  compare the key itself. */
+export async function findOperatorIdByApiKey(key: string): Promise<string | null> {
+  const hash = hashApiKey(key);
+  const rows = await sbRequest<Array<{ id: string; operator_id: string; revoked_at: string | null }>>(
+    `gt_api_keys?key_hash=eq.${hash}&select=id,operator_id,revoked_at&limit=1`,
+  ).catch(() => null);
+  const row = rows?.[0];
+  if (!row || row.revoked_at) return null;
+  // Best-effort usage touch; never blocks or fails the request.
+  void sbUpdate('gt_api_keys', `id=eq.${row.id}`, { last_used_at: nowIso() }).catch(() => []);
+  return row.operator_id;
 }
 
 /** One booking as webhook data, by id, scoped to the operator. The source for a

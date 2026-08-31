@@ -67,9 +67,12 @@ import {
   setWebhookActive,
   deleteWebhook,
   getBookingEventData,
+  createApiKey,
+  revokeApiKey,
 } from '@/lib/repo';
 import { dispatchBookingEvent, deliverOne } from '@/lib/dispatch';
 import { genSecret, buildBookingEvent, isWebhookEvent } from '@/lib/webhooks';
+import { mintApiKey } from '@/lib/apikeys';
 
 /** Turns FormData into a plain object the validators can read. */
 function fields(form: FormData): Record<string, unknown> {
@@ -652,4 +655,30 @@ export async function sendTestWebhookAction(id: string): Promise<{ ok: boolean; 
   const status = await deliverOne({ id: wh.id, url: wh.url, secret: wh.secret }, JSON.stringify(envelope), 'booking.created');
   revalidatePath('/console/integrations');
   return { ok: status >= 200 && status < 300, status };
+}
+
+// ---------------------------------------------------------------------------
+//  API keys — owner-only, like webhooks. A key is minted here and shown ONCE;
+//  only its hash is ever stored.
+// ---------------------------------------------------------------------------
+
+export async function createApiKeyAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOwner();
+  if (!ctx) return fail({}, 'Only an owner can manage API keys.');
+
+  const name = String(form.get('name') || '').trim().slice(0, 80);
+  const key = mintApiKey();
+  const saved = await createApiKey(ctx.operatorId, key, name || null);
+  if (!saved) return fail({}, 'Could not create a key. Please try again.');
+
+  revalidatePath('/console/integrations');
+  // The `key:` prefix tells the form to render this in a copy-once box.
+  return { ok: true, errors: {}, message: `key:${key}` };
+}
+
+export async function revokeApiKeyAction(form: FormData): Promise<void> {
+  const ctx = await requireOwner();
+  if (!ctx) return;
+  await revokeApiKey(ctx.operatorId, String(form.get('id') || ''));
+  revalidatePath('/console/integrations');
 }

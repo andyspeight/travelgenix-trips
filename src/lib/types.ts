@@ -47,6 +47,19 @@ export interface OperatorBrand {
   replyTo?: string;
 }
 
+/** One API key row. The key itself is never stored — only key_hash — so this is
+ *  what a list view shows: the visible prefix, an optional name, and usage. A
+ *  revoked_at makes the key stop working without losing its audit trail. */
+export interface ApiKey {
+  id: string;
+  operator_id: string;
+  key_prefix: string;
+  name: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
 /** One outbound webhook endpoint an operator has registered. `secret` is only
  *  ever surfaced once at creation; list views carry it redacted. events is the
  *  subscription filter; last_status / last_at are the most recent delivery. */
