@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/registration-reminders", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/registration-reminders", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/abandoned-recovery", "schedule": "0 10 * * *" }
   ]
 }

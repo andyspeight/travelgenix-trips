@@ -196,6 +196,39 @@ export async function sendRegistrationReminder(ctx: BookingEmailContext): Promis
   });
 }
 
+/** A one-time come-back email to a traveller whose hold lapsed without them
+ *  completing. Warm and low-pressure: their places are no longer held, but the
+ *  trip is a click away. Links straight back to the booking form. */
+export async function sendAbandonedRecovery(
+  ctx: BookingEmailContext,
+  links: { operatorSlug: string; tripSlug: string },
+): Promise<{ ok: boolean; detail: string }> {
+  const bookLink = links.operatorSlug && links.tripSlug
+    ? `${PUBLIC_ORIGIN}/book/${links.operatorSlug}/${links.tripSlug}`
+    : PUBLIC_ORIGIN;
+
+  const body = [
+    `Hi ${firstName(ctx.leadName)},`,
+    ``,
+    `You started booking ${ctx.tripTitle} with ${ctx.operatorName} but did not finish, so your places are no longer being held.`,
+    ``,
+    `If you would still like to travel, you can pick up where you left off here:`,
+    bookLink,
+    ``,
+    `Places can go quickly, so it is worth booking soon. If you have any questions, just reply to this email.`,
+    ``,
+    `Hope to see you on the trip,`,
+    ctx.operatorName,
+  ].join('\n');
+
+  return safeSend({
+    to: ctx.leadEmail,
+    replyTo: ctx.operatorReplyTo ?? undefined,
+    subject: `Still thinking about ${ctx.tripTitle}?`,
+    body,
+  });
+}
+
 /** Never throws. A notification failure is logged and swallowed. */
 async function safeSend(msg: EmailMessage): Promise<{ ok: boolean; detail: string }> {
   try {

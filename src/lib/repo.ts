@@ -1700,6 +1700,63 @@ export async function markBookingReminded(bookingId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+//  Abandoned-booking recovery (gt_020). A pending hold that lapsed without
+//  completing, chased once with a come-back email. Carries the operator and trip
+//  slugs so the email can link straight back to the booking form.
+// ---------------------------------------------------------------------------
+
+export interface AbandonedBooking extends ReminderBooking {
+  operator_slug: string;
+  trip_slug: string;
+}
+
+export async function findAbandonedBookings(limit = 50): Promise<AbandonedBooking[]> {
+  const now = Date.now();
+  const nowIsoStr = new Date(now).toISOString();
+  const windowAgo = new Date(now - 30 * 86400000).toISOString();
+
+  // Pending, hold lapsed, never recovered, recent, reachable. The pure isAbandoned
+  // rule mirrors these conditions and is what the tests exercise.
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?status=eq.pending&recovery_sent_at=is.null` +
+      `&hold_expires_at=lt.${nowIsoStr}&created_at=gte.${windowAgo}` +
+      `&traveller_email=not.is.null` +
+      `&select=id,reference,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,slug,operator:gt_operators(name,slug,brand)))` +
+      `&order=created_at.asc&limit=${limit}`,
+  ).catch(() => null);
+
+  return (rows ?? []).map((r) => {
+    const dep = (r.departure ?? {}) as Record<string, unknown>;
+    const trip = (dep.trip ?? {}) as Record<string, unknown>;
+    const op = (trip.operator ?? {}) as Record<string, unknown>;
+    const brand = (op.brand ?? null) as OperatorBrand | null;
+    return {
+      id: String(r.id),
+      reference: String(r.reference),
+      party_size: Number(r.party_size),
+      total_pence: (r.total_pence as number) ?? null,
+      deposit_pence: (r.deposit_pence as number) ?? null,
+      currency: String(r.currency ?? 'gbp'),
+      traveller_name: (r.traveller_name as string) ?? null,
+      traveller_email: (r.traveller_email as string) ?? null,
+      starts_on: (dep.starts_on as string) ?? null,
+      ends_on: (dep.ends_on as string) ?? null,
+      trip_title: String(trip.title ?? 'your trip'),
+      operator_name: String(op.name ?? 'the operator'),
+      operator_reply_to: brand?.replyTo ?? null,
+      operator_slug: String(op.slug ?? ''),
+      trip_slug: String(trip.slug ?? ''),
+    };
+  });
+}
+
+export async function markRecoverySent(bookingId: string): Promise<void> {
+  if (!isUuid(bookingId)) return;
+  await sbUpdate('gt_bookings', `id=eq.${bookingId}`, { recovery_sent_at: nowIso() }).catch(() => []);
+}
+
+// ---------------------------------------------------------------------------
 //  Messaging — broadcast to a trip's travellers, and reusable templates. All
 //  operator-gated. Sending goes through the notify seam, so it composes and
 //  records now and actually delivers the moment an email key is configured.
