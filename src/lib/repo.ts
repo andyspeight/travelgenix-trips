@@ -19,13 +19,13 @@ import 'server-only';
 import { sbRequest, sbInsert, sbUpdate, SupabaseError } from './supabase.ts';
 import { slugify } from './validate.ts';
 import { format as fmtMoney } from './money.ts';
-import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput, ReviewInput } from './validate.ts';
+import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput, ReviewInput, TaskInput } from './validate.ts';
 import { summariseRatings } from './reviews.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem } from './types.ts';
 import { deleteDocument } from './storage.ts';
 import { resolveOperatorRole, emailKey } from './members.ts';
 import type { Session } from './auth.ts';
@@ -778,6 +778,119 @@ export async function getApprovedReviews(
       title: r.title, body: r.body, created_at: r.created_at,
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+//  Participant tasks (gt_019). Operator-authored per-booking checklist. Two
+//  trust models: operator-gated authoring, and reference-gated ticking (a
+//  booking marks its own tasks done). Never per-traveller PII; a task is the
+//  same for the whole party.
+// ---------------------------------------------------------------------------
+
+export async function listTripTasks(tripId: string): Promise<TripTask[]> {
+  if (!isUuid(tripId)) return [];
+  return (
+    (await sbRequest<TripTask[]>(
+      `gt_trip_tasks?trip_id=eq.${tripId}&select=*&order=sort_order.asc,created_at.asc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+/** Operator-gated list for the editor: empty for a trip that is not theirs. */
+export async function getTasksForTrip(tripId: string, operatorId: string): Promise<TripTask[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return listTripTasks(tripId);
+}
+
+export async function createTask(tripId: string, operatorId: string, input: TaskInput): Promise<TripTask | null> {
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  const rows = await sbInsert<TripTask>('gt_trip_tasks', { ...input, trip_id: tripId, operator_id: operatorId });
+  return rows[0] ?? null;
+}
+
+export async function updateTask(taskId: string, tripId: string, operatorId: string, input: TaskInput): Promise<TripTask | null> {
+  if (!isUuid(taskId)) return null;
+  if (!(await getTripOwned(tripId, operatorId))) return null;
+  const rows = await sbUpdate<TripTask>(
+    'gt_trip_tasks',
+    `id=eq.${taskId}&trip_id=eq.${tripId}&operator_id=eq.${operatorId}`,
+    { ...input, updated_at: nowIso() },
+  );
+  return rows[0] ?? null;
+}
+
+export async function removeTask(taskId: string, tripId: string, operatorId: string): Promise<boolean> {
+  if (!isUuid(taskId)) return false;
+  if (!(await getTripOwned(tripId, operatorId))) return false;
+  await sbRequest(`gt_trip_tasks?id=eq.${taskId}&trip_id=eq.${tripId}&operator_id=eq.${operatorId}`, { method: 'DELETE' })
+    .catch(() => null);
+  return true;
+}
+
+/** Resolve a booking reference to its id and trip. Shared by the checklist read
+ *  and the tick write; null when the reference names no live booking. */
+async function bookingForChecklist(reference: string): Promise<{ bookingId: string; tripId: string } | null> {
+  const ref = String(reference || '');
+  if (!ref) return null;
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?reference=eq.${encodeURIComponent(ref)}&select=id,status,departure:gt_departures(trip_id)&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+  if (r.status === 'expired' || r.status === 'cancelled') return null;
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const tripId = String(dep.trip_id ?? '');
+  if (!isUuid(tripId)) return null;
+  return { bookingId: String(r.id), tripId };
+}
+
+/** The checklist a booking sees: the trip's tasks with this booking's done state. */
+export async function getChecklist(reference: string): Promise<ChecklistItem[]> {
+  const b = await bookingForChecklist(reference);
+  if (!b) return [];
+  const [tasks, done] = await Promise.all([
+    listTripTasks(b.tripId),
+    sbRequest<Array<{ task_id: string }>>(`gt_task_done?booking_id=eq.${b.bookingId}&select=task_id`).catch(() => null),
+  ]);
+  const doneSet = new Set((done ?? []).map((d) => d.task_id));
+  return tasks.map((t) => ({
+    id: t.id, label: t.label, detail: t.detail, due_date: t.due_date, done: doneSet.has(t.id),
+  }));
+}
+
+/** Tick or untick one task for a booking, reference-gated. The task must belong
+ *  to the booking's own trip, so a booking can only affect its own checklist. */
+export async function setTaskDone(reference: string, taskId: string, done: boolean): Promise<boolean> {
+  const b = await bookingForChecklist(reference);
+  if (!b || !isUuid(taskId)) return false;
+
+  const belongs = await sbRequest<Array<{ id: string }>>(
+    `gt_trip_tasks?id=eq.${taskId}&trip_id=eq.${b.tripId}&select=id&limit=1`,
+  ).catch(() => null);
+  if (!belongs?.length) return false;
+
+  if (done) {
+    // Idempotent: the unique index turns a repeat tick into a no-op.
+    await sbInsert('gt_task_done', { task_id: taskId, booking_id: b.bookingId }).catch(() => null);
+  } else {
+    await sbRequest(`gt_task_done?task_id=eq.${taskId}&booking_id=eq.${b.bookingId}`, { method: 'DELETE' }).catch(() => null);
+  }
+  return true;
+}
+
+/** For the operator's booking detail: how many of the trip's tasks this booking
+ *  has done, out of how many. Zero total means the trip has no checklist. */
+export async function getTaskProgress(bookingId: string, tripId: string): Promise<{ done: number; total: number }> {
+  if (!isUuid(bookingId) || !isUuid(tripId)) return { done: 0, total: 0 };
+  const [tasks, done] = await Promise.all([
+    sbRequest<Array<{ id: string }>>(`gt_trip_tasks?trip_id=eq.${tripId}&select=id`).catch(() => null),
+    sbRequest<Array<{ task_id: string }>>(`gt_task_done?booking_id=eq.${bookingId}&select=task_id`).catch(() => null),
+  ]);
+  const total = tasks?.length ?? 0;
+  const taskIds = new Set((tasks ?? []).map((t) => t.id));
+  // Count only done rows whose task still exists on this trip.
+  const doneCount = (done ?? []).filter((d) => taskIds.has(d.task_id)).length;
+  return { done: doneCount, total };
 }
 
 // ---------------------------------------------------------------------------

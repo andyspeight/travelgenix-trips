@@ -5,9 +5,9 @@
 
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveTripAction, saveDepartureAction, savePackageAction, saveOptionAction, savePromoAction, addMemberAction } from './actions';
+import { saveTripAction, saveDepartureAction, savePackageAction, saveOptionAction, savePromoAction, addMemberAction, saveTaskAction } from './actions';
 import { EMPTY_STATE, type ActionState } from '@/lib/action-state';
-import type { Trip, Departure, Package, TripOption } from '@/lib/types';
+import type { Trip, Departure, Package, TripOption, TripTask } from '@/lib/types';
 import { ROLES } from '@/lib/members';
 import { MediaField } from './media-picker';
 
@@ -328,6 +328,42 @@ export function PromoForm({ tripId }: { tripId: string }) {
 
       <div className="c-actions">
         <Submit label="Add code" busy="Saving..." />
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export function TaskForm({ tripId, task }: { tripId: string; task?: TripTask }) {
+  const [state, action] = useActionState(saveTaskAction, EMPTY_STATE);
+  const e = state.errors;
+
+  return (
+    <form action={action} noValidate>
+      <Notice state={state} />
+      <input type="hidden" name="trip_id" value={tripId} />
+      {task && <input type="hidden" name="id" value={task.id} />}
+
+      <div className="c-row">
+        <Field name="label" label="Task" error={e.label}>
+          <input id="label" name="label" defaultValue={task?.label ?? ''} placeholder="Book your travel insurance" maxLength={200} required />
+        </Field>
+        <Field name="due_date" label="Due by" hint="Optional." error={e.due_date}>
+          <input id="due_date" name="due_date" type="date" defaultValue={task?.due_date ?? ''} />
+        </Field>
+      </div>
+
+      <Field name="detail" label="Detail" hint="Optional. A line of guidance for the traveller." error={e.detail}>
+        <textarea id="detail" name="detail" defaultValue={task?.detail ?? ''} maxLength={1000} />
+      </Field>
+
+      <Field name="sort_order" label="Order" hint="Lower shows first." error={e.sort_order}>
+        <input id="sort_order" name="sort_order" type="number" defaultValue={task?.sort_order ?? 0} />
+      </Field>
+
+      <div className="c-actions">
+        <Submit label={task ? 'Save task' : 'Add task'} busy="Saving..." />
       </div>
     </form>
   );

@@ -10,7 +10,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getBookingDetail } from '@/lib/repo';
+import { ensureOperator, getBookingDetail, getTaskProgress } from '@/lib/repo';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { format as money } from '@/lib/money';
 import { SignInPrompt, NoOperator, DbMissing } from '../../states';
@@ -37,6 +37,9 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
   if (!detail) notFound();
 
   const { booking, form, waiver, responses, signatures, trip, packageName, selectedOptions, documents, registrationComplete } = detail;
+
+  // How far this booking has got through the operator's checklist, if any.
+  const tasks = trip ? await getTaskProgress(booking.id, trip.id) : { done: 0, total: 0 };
 
   // Field key -> label, so an answer reads as a question rather than a code.
   const labels = new Map<string, RegField>((form?.schema ?? []).map((f) => [f.key, f]));
@@ -77,6 +80,12 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
           ? 'Registration complete. Every traveller is named, every required question answered' + (waiver?.is_mandatory ? ', and the agreement signed by all.' : '.')
           : 'Registration in progress. Some details are still outstanding' + (waiver?.is_mandatory ? ', including one or more signatures.' : '.')}
       </p>
+
+      {tasks.total > 0 && (
+        <p className={`c-note ${tasks.done >= tasks.total ? 'c-note--ok' : 'c-note--calm'}`}>
+          Checklist: {tasks.done} of {tasks.total} {tasks.total === 1 ? 'task' : 'tasks'} done by this booking.
+        </p>
+      )}
 
       {(booking.total_pence || booking.balance_pence) && (
         <dl className="c-facts">

@@ -334,6 +334,26 @@ export interface ReviewSummary {
   count: number;
 }
 
+/** An operator-authored to-do on a trip, ticked off per booking. */
+export interface TripTask {
+  id: string;
+  operator_id: string;
+  trip_id: string;
+  label: string;
+  detail: string | null;
+  due_date: string | null;
+  sort_order: number;
+}
+
+/** One task as a booking sees it: the task plus whether this booking has done it. */
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  detail: string | null;
+  due_date: string | null;
+  done: boolean;
+}
+
 export type WaitlistStatus = 'waiting' | 'invited' | 'converted' | 'removed';
 
 export interface WaitlistEntry {

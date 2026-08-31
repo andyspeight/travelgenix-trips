@@ -446,6 +446,44 @@ export function validateReview(raw: Record<string, unknown>): Validated<ReviewIn
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Trip tasks (operator authoring — a per-booking checklist item)
+// ---------------------------------------------------------------------------
+
+export interface TaskInput {
+  label: string;
+  detail: string | null;
+  due_date: string | null;
+  sort_order: number;
+}
+
+export function validateTask(raw: Record<string, unknown>): Validated<TaskInput> {
+  const errors: FieldErrors = {};
+
+  const label = text(raw.label);
+  if (!label) errors.label = 'Give the task a name.';
+  else if (label.length > 200) errors.label = 'Keep the task name shorter.';
+
+  const detail = text(raw.detail).slice(0, 1000);
+
+  const due = text(raw.due_date);
+  if (due && !isRealDate(due)) errors.due_date = 'That due date is not a real date.';
+
+  const sortRaw = text(raw.sort_order) || '0';
+  const sort = Number.parseInt(sortRaw, 10);
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      label,
+      detail: detail || null,
+      due_date: due && isRealDate(due) ? due : null,
+      sort_order: Number.isFinite(sort) ? sort : 0,
+    },
+  };
+}
+
 export function validatePackage(raw: Record<string, unknown>): Validated<PackageInput> {
   const errors: FieldErrors = {};
 

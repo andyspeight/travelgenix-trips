@@ -8,10 +8,11 @@
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getConfirmation } from '@/lib/repo';
+import { getConfirmation, getChecklist } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { format as money } from '@/lib/money';
 import { tripsDbConfigured } from '@/lib/supabase';
+import { Checklist } from '../checklist';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Booking confirmed' };
@@ -33,6 +34,10 @@ export default async function BookedPage({
   const c = await getConfirmation(ref);
   if (!c) notFound();
   const justRegistered = registered === '1';
+
+  // The operator's checklist for this booking, if the trip has one.
+  const dead0 = c.status === 'expired' || c.status === 'cancelled';
+  const checklist = dead0 ? [] : await getChecklist(ref);
 
   const total = money(c.total_pence, c.currency);
   const deposit = money(c.deposit_pence, c.currency);
@@ -106,6 +111,8 @@ export default async function BookedPage({
             </div>
           )
         )}
+
+        {!dead && checklist.length > 0 && <Checklist reference={c.reference} items={checklist} />}
 
         {!dead && <p className="bk-note">No card has been charged. Online payment is coming soon.</p>}
       </div>

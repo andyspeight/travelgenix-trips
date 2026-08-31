@@ -20,7 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireEditor, requireOwner } from '@/lib/auth';
-import { validateTrip, validateDeparture, validatePackage, validateOption, validatePromo, isValidTripStatus } from '@/lib/validate';
+import { validateTrip, validateDeparture, validatePackage, validateOption, validatePromo, validateTask, isValidTripStatus } from '@/lib/validate';
 import { validateMember } from '@/lib/members';
 import { sanitiseTripContent } from '@/lib/content';
 import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
@@ -59,6 +59,9 @@ import {
   removeOperatorMember,
   setReviewStatus,
   removeReview,
+  createTask,
+  updateTask,
+  removeTask,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -234,6 +237,40 @@ export async function removeOptionAction(form: FormData): Promise<void> {
   // Bookings keep their own snapshot of the extras they chose, so removing an
   // option here never erases what a traveller booked.
   await removeOption(optionId, tripId, ctx.operatorId);
+  revalidatePath(`/console/trips/${tripId}`);
+}
+
+// ---------------------------------------------------------------------------
+//  Trip tasks — the operator's per-booking checklist (gt_019).
+// ---------------------------------------------------------------------------
+
+export async function saveTaskAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireEditor();
+  if (!ctx) return fail({}, 'Your session has expired. Sign in again.');
+
+  const raw = fields(form);
+  const tripId = String(raw.trip_id || '');
+  const taskId = String(raw.id || '');
+
+  const { ok, errors, value } = validateTask(raw);
+  if (!ok) return fail(errors, 'Check the highlighted fields.');
+
+  const saved = taskId
+    ? await updateTask(taskId, tripId, ctx.operatorId, value)
+    : await createTask(tripId, ctx.operatorId, value);
+
+  if (!saved) return fail({}, 'That trip could not be found.');
+
+  revalidatePath(`/console/trips/${tripId}`);
+  return { ok: true, errors: {}, message: taskId ? 'Saved.' : 'Task added.' };
+}
+
+export async function removeTaskAction(form: FormData): Promise<void> {
+  const ctx = await requireEditor();
+  if (!ctx) return;
+
+  const tripId = String(form.get('trip_id') || '');
+  await removeTask(String(form.get('id') || ''), tripId, ctx.operatorId);
   revalidatePath(`/console/trips/${tripId}`);
 }
 

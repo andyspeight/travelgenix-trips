@@ -4,14 +4,14 @@
 
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, getOptionsForTrip, listPromoCodes, describePromo, listOperatorMembers } from '@/lib/repo';
+import { ensureOperator, getTripOwned, listDepartures, getFormForTrip, getWaiverForTrip, getPackagesForTrip, getOptionsForTrip, getTasksForTrip, listPromoCodes, describePromo, listOperatorMembers } from '@/lib/repo';
 import { resolveOperatorRole, canEdit } from '@/lib/members';
 import { format as money } from '@/lib/money';
-import { TripForm, DepartureForm, PackageForm, OptionForm, PromoForm } from '../../forms';
+import { TripForm, DepartureForm, PackageForm, OptionForm, TaskForm, PromoForm } from '../../forms';
 import { ContentEditor } from '../../content-editor';
 import { RegistrationEditor } from '../../registration-editor';
 import { SignInPrompt, NoOperator } from '../../states';
-import { setTripStatusAction, removeDepartureAction, removePackageAction, removeOptionAction, removePromoAction } from '../../actions';
+import { setTripStatusAction, removeDepartureAction, removePackageAction, removeOptionAction, removeTaskAction, removePromoAction } from '../../actions';
 import type { Departure, Package } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -34,11 +34,12 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
   const openCount = departures.filter((d) => d.status === 'open').length;
   const publicUrl = `/trip/${operator.slug}/${trip.slug}`;
 
-  const [regForm, waiver, packages, options, promos, members] = await Promise.all([
+  const [regForm, waiver, packages, options, tasks, promos, members] = await Promise.all([
     getFormForTrip(trip.id, operator.id),
     getWaiverForTrip(trip.id, operator.id),
     getPackagesForTrip(trip.id, operator.id),
     getOptionsForTrip(trip.id, operator.id),
+    getTasksForTrip(trip.id, operator.id),
     listPromoCodes(trip.id, operator.id),
     listOperatorMembers(operator.id),
   ]);
@@ -173,6 +174,29 @@ export default async function EditTripPage({ params }: { params: Promise<{ id: s
 
       <h2 style={{ fontSize: '1rem' }}>Add an extra</h2>
       <OptionForm tripId={trip.id} />
+
+      <h2>Traveller checklist</h2>
+      <p className="c-sub" style={{ marginTop: '-6px' }}>
+        Things each booking needs to do before they travel, with an optional due date. Travellers tick
+        these off on their confirmation page and you can see how far each booking has got.
+      </p>
+      {tasks.length === 0 ? (
+        <p className="c-empty">No tasks yet. Add anything a traveller should do before the trip.</p>
+      ) : (
+        tasks.map((t) => (
+          <div key={t.id} className="ce-section">
+            <TaskForm tripId={trip.id} task={t} />
+            <form action={removeTaskAction} style={{ marginTop: 8 }}>
+              <input type="hidden" name="trip_id" value={trip.id} />
+              <input type="hidden" name="id" value={t.id} />
+              <button className="c-btn c-btn--quiet" type="submit">Remove this task</button>
+            </form>
+          </div>
+        ))
+      )}
+
+      <h2 style={{ fontSize: '1rem' }}>Add a task</h2>
+      <TaskForm tripId={trip.id} />
 
       <h2>Promo codes</h2>
       <p className="c-sub" style={{ marginTop: '-6px' }}>

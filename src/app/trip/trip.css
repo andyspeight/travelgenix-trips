@@ -435,6 +435,21 @@
 .bk-cta--ghost:hover { filter: none; background: var(--op-wash, #fafafa); }
 a.bk-cta { display: block; text-align: center; text-decoration: none; }
 
+/* traveller checklist (on the confirmation hub) */
+.bk-check { text-align: left; background: #fff; border: 1px solid var(--op-rule, #e3e7ea); border-radius: 10px; padding: 16px 18px; margin: 0 0 18px; }
+.bk-check-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.bk-check-head h2 { font-size: 1rem; margin: 0; }
+.bk-check-prog { font-size: 13px; color: var(--op-muted, #59626a); white-space: nowrap; }
+.bk-check-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.bk-check-item label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.bk-check-item input { margin-top: 3px; accent-color: var(--op-accent); width: 18px; height: 18px; flex: none; }
+.bk-check-main { display: flex; flex-direction: column; gap: 2px; }
+.bk-check-label { font-weight: 500; font-size: 14.5px; }
+.bk-check-item.is-done .bk-check-label { text-decoration: line-through; color: var(--op-muted, #59626a); }
+.bk-check-detail { font-size: 13px; color: var(--op-ink-2, #3b434b); line-height: 1.4; }
+.bk-check-due { font-size: 12.5px; color: var(--op-muted, #59626a); }
+.bk-check-due.is-overdue { color: var(--tg-danger, #b3421f); font-weight: 500; }
+
 /* ---------------------------------------------------------------------------
    Room options / packages on the public trip page (phase 5).
    --------------------------------------------------------------------------- */

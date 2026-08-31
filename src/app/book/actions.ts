@@ -17,7 +17,7 @@
 import { redirect } from 'next/navigation';
 import { validateBooking } from '@/lib/booking';
 import { validateWaitlist } from '@/lib/validate';
-import { takeHold, getConfirmation, joinWaitlist, getBookingOperatorContact, checkPromoCode } from '@/lib/repo';
+import { takeHold, getConfirmation, joinWaitlist, getBookingOperatorContact, checkPromoCode, setTaskDone } from '@/lib/repo';
 import { holdMessage } from '@/lib/hold';
 import { fail, type ActionState } from '@/lib/action-state';
 import { sendTravellerConfirmation, sendOperatorNotice } from '@/lib/notify';
@@ -119,6 +119,13 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
  *  hold re-validates, so this only ever previews. */
 export async function checkPromoAction(tripId: string, code: string): Promise<{ valid: boolean; describe?: string }> {
   return checkPromoCode(String(tripId), String(code));
+}
+
+/** Public: a booking ticks one of its checklist tasks. Reference-gated on the
+ *  server, so a booking can only ever change its own checklist. */
+export async function setTaskDoneAction(reference: string, taskId: string, done: boolean): Promise<{ ok: boolean }> {
+  const ok = await setTaskDone(String(reference), String(taskId), Boolean(done));
+  return { ok };
 }
 
 export async function joinWaitlistAction(_prev: ActionState, form: FormData): Promise<ActionState> {

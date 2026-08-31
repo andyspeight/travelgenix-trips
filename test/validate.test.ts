@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   slugify, isUsableSlug, isSafeHttpUrl, isRealDate, validateTrip, validateDeparture, validatePackage,
-  validateOption, validateReview,
+  validateOption, validateReview, validateTask,
 } from '../src/lib/validate.ts';
 
 // --------------------------------------------------------------------------
@@ -311,4 +311,21 @@ test('a review title is optional', () => {
   const r = validateReview({ reviewer_name: 'Ada', rating: '4', body: 'Really enjoyed it.' });
   assert.equal(r.ok, true);
   assert.equal(r.value.title, null);
+});
+
+// --------------------------------------------------------------------------
+//  Trip tasks
+// --------------------------------------------------------------------------
+
+test('a task needs a label; detail and due date are optional', () => {
+  assert.ok(validateTask({ label: '  ' }).errors.label);
+  const r = validateTask({ label: 'Book your travel insurance' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.detail, null);
+  assert.equal(r.value.due_date, null);
+});
+
+test('a task keeps a real due date and rejects a fake one', () => {
+  assert.equal(validateTask({ label: 'Pay balance', due_date: '2026-09-01' }).value.due_date, '2026-09-01');
+  assert.ok(validateTask({ label: 'Pay balance', due_date: '2026-02-31' }).errors.due_date);
 });
