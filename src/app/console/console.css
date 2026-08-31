@@ -147,6 +147,8 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 .ce-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .ce-check input { width: auto; }
 .ce-section { border: 1px solid var(--tg-rule); border-radius: 6px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.c-import-cta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 22px; }
+.c-import textarea { width: 100%; font: inherit; min-height: 180px; resize: vertical; }
 .ce-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .ce-cols > div { display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 620px) { .ce-cols { grid-template-columns: 1fr; } }
