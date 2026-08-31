@@ -20,7 +20,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireEditor, requireOwner } from '@/lib/auth';
-import { validateTrip, validateDeparture, validatePackage, validateOption, validatePromo, validateTask, isValidTripStatus } from '@/lib/validate';
+import { validateTrip, validateDeparture, validatePackage, validateOption, validatePromo, validateTask, isValidTripStatus, isSafeHttpUrl } from '@/lib/validate';
 import { validateMember } from '@/lib/members';
 import { sanitiseTripContent } from '@/lib/content';
 import { sanitiseFormSchema, sanitiseWaiverInput, validateRegistration } from '@/lib/registration';
@@ -62,7 +62,14 @@ import {
   createTask,
   updateTask,
   removeTask,
+  listWebhooks,
+  createWebhook,
+  setWebhookActive,
+  deleteWebhook,
+  getBookingEventData,
 } from '@/lib/repo';
+import { dispatchBookingEvent, deliverOne } from '@/lib/dispatch';
+import { genSecret, buildBookingEvent, isWebhookEvent } from '@/lib/webhooks';
 
 /** Turns FormData into a plain object the validators can read. */
 function fields(form: FormData): Record<string, unknown> {
@@ -289,6 +296,16 @@ export async function bulkSetBookingStatusAction(
 
   const list = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [];
   const updated = await bulkSetBookingStatus(tripId, ctx.operatorId, list, String(status));
+
+  // Fire booking.updated to any registered endpoint. Best-effort and scoped: a
+  // forged id resolves to null and is skipped. A no-op if nothing changed or no
+  // endpoints are configured.
+  if (updated > 0) {
+    for (const id of list) {
+      const data = await getBookingEventData(id, ctx.operatorId);
+      if (data) await dispatchBookingEvent(ctx.operatorId, 'booking.updated', data);
+    }
+  }
 
   revalidatePath(`/console/trips/${tripId}/manage`);
   revalidatePath('/console/bookings');
@@ -565,4 +582,74 @@ export async function submitRegistrationAction(_prev: ActionState, form: FormDat
 
   revalidatePath(`/booked/${ctx.booking.reference}`);
   redirect(`/booked/${ctx.booking.reference}?registered=1`);
+}
+
+// ---------------------------------------------------------------------------
+//  Integrations — outbound webhooks. Owner-only: wiring the platform into an
+//  operator's other systems is an account-level decision, like the team.
+// ---------------------------------------------------------------------------
+
+export async function addWebhookAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const ctx = await requireOwner();
+  if (!ctx) return fail({}, 'Only an owner can manage integrations.');
+
+  const url = String(form.get('url') || '').trim();
+  if (!isSafeHttpUrl(url)) return fail({ url: 'Enter a valid https:// endpoint URL.' }, 'Check the endpoint URL.');
+
+  // Only known event types are stored; an empty selection means all events.
+  const events = form.getAll('events').map(String).filter(isWebhookEvent);
+
+  // The secret is minted here and shown to the operator exactly once, below.
+  const secret = genSecret();
+  const wh = await createWebhook(ctx.operatorId, url, secret, events);
+  if (!wh) return fail({}, 'Could not save that endpoint. Please try again.');
+
+  revalidatePath('/console/integrations');
+  // The `secret:` prefix tells the form to render this in a copy-once box.
+  return { ok: true, errors: {}, message: `secret:${secret}` };
+}
+
+export async function toggleWebhookAction(form: FormData): Promise<void> {
+  const ctx = await requireOwner();
+  if (!ctx) return;
+  const active = String(form.get('active') || '') === 'true';
+  await setWebhookActive(ctx.operatorId, String(form.get('id') || ''), active);
+  revalidatePath('/console/integrations');
+}
+
+export async function removeWebhookAction(form: FormData): Promise<void> {
+  const ctx = await requireOwner();
+  if (!ctx) return;
+  await deleteWebhook(ctx.operatorId, String(form.get('id') || ''));
+  revalidatePath('/console/integrations');
+}
+
+/** Send a sample booking.created event to one endpoint so the operator can
+ *  confirm their receiver works. Returns the HTTP status their endpoint gave. */
+export async function sendTestWebhookAction(id: string): Promise<{ ok: boolean; status: number }> {
+  const ctx = await requireOwner();
+  if (!ctx) return { ok: false, status: 0 };
+
+  const wh = (await listWebhooks(ctx.operatorId)).find((w) => w.id === String(id));
+  if (!wh) return { ok: false, status: 0 };
+
+  const envelope = buildBookingEvent('booking.created', {
+    reference: 'TGT-TEST-0000',
+    status: 'deposit_paid',
+    trip: 'Sample trip',
+    operator: 'Test operator',
+    party_size: 2,
+    currency: 'gbp',
+    total_pence: 100000,
+    deposit_pence: 20000,
+    starts_on: null,
+    ends_on: null,
+    lead_name: 'Test traveller',
+    lead_email: 'test@example.com',
+    package: null,
+    promo: null,
+  });
+  const status = await deliverOne({ id: wh.id, url: wh.url, secret: wh.secret }, JSON.stringify(envelope), 'booking.created');
+  revalidatePath('/console/integrations');
+  return { ok: status >= 200 && status < 300, status };
 }

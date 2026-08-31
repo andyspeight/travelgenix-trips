@@ -27,7 +27,7 @@ import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem, Webhook } from './types.ts';
 import { deleteDocument } from './storage.ts';
 import { resolveOperatorRole, emailKey } from './members.ts';
 import type { Session } from './auth.ts';
@@ -2052,6 +2052,162 @@ export async function listOperatorBookingsForExport(operatorId: string): Promise
       booked_on: String(r.created_at ?? '').slice(0, 10),
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+//  Webhooks (integrations, gap 10). All scoped by operator_id so one operator
+//  can never see or touch another's endpoints. The secret is stored so we can
+//  sign; callers that surface a list redact it (see lib/webhooks.redactSecret).
+// ---------------------------------------------------------------------------
+
+function mapWebhook(r: Record<string, unknown>): Webhook {
+  return {
+    id: String(r.id),
+    operator_id: String(r.operator_id),
+    url: String(r.url ?? ''),
+    secret: String(r.secret ?? ''),
+    events: Array.isArray(r.events) ? (r.events as string[]) : [],
+    active: Boolean(r.active),
+    last_status: r.last_status == null ? null : Number(r.last_status),
+    last_at: (r.last_at as string) ?? null,
+    created_at: String(r.created_at ?? ''),
+  };
+}
+
+/** Every endpoint an operator has registered, newest first. */
+export async function listWebhooks(operatorId: string): Promise<Webhook[]> {
+  if (!isUuid(operatorId)) return [];
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_webhooks?operator_id=eq.${operatorId}&order=created_at.desc`,
+  ).catch(() => null);
+  return (rows ?? []).map(mapWebhook);
+}
+
+/** The active endpoints subscribed to one event, for dispatch. An endpoint with
+ *  an empty events array is treated as subscribed to everything (a sensible
+ *  default the UI never writes but that is friendly if set by hand). */
+export async function listActiveWebhooksForEvent(operatorId: string, event: string): Promise<Webhook[]> {
+  if (!isUuid(operatorId)) return [];
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_webhooks?operator_id=eq.${operatorId}&active=is.true&select=*`,
+  ).catch(() => null);
+  return (rows ?? []).map(mapWebhook).filter((w) => w.events.length === 0 || w.events.includes(event));
+}
+
+/** Register an endpoint. The secret is minted by the caller (lib/webhooks) so it
+ *  can be shown once and never round-trips through a form. Returns the new row. */
+export async function createWebhook(
+  operatorId: string,
+  url: string,
+  secret: string,
+  events: string[],
+): Promise<Webhook | null> {
+  if (!isUuid(operatorId)) return null;
+  const rows = await sbInsert<Record<string, unknown>>('gt_webhooks', {
+    operator_id: operatorId,
+    url,
+    secret,
+    events,
+    active: true,
+  }).catch(() => []);
+  return rows[0] ? mapWebhook(rows[0]) : null;
+}
+
+/** Turn an endpoint on or off without deleting it. Scoped by operator_id. */
+export async function setWebhookActive(operatorId: string, id: string, active: boolean): Promise<boolean> {
+  if (!isUuid(operatorId) || !isUuid(id)) return false;
+  const rows = await sbUpdate('gt_webhooks', `id=eq.${id}&operator_id=eq.${operatorId}`, { active }).catch(() => []);
+  return rows.length > 0;
+}
+
+/** Remove an endpoint for good. Scoped by operator_id so a forged id is a no-op. */
+export async function deleteWebhook(operatorId: string, id: string): Promise<void> {
+  if (!isUuid(operatorId) || !isUuid(id)) return;
+  await sbRequest(`gt_webhooks?id=eq.${id}&operator_id=eq.${operatorId}`, { method: 'DELETE' }).catch(() => null);
+}
+
+/** Record the outcome of a delivery attempt, so the operator can see endpoint
+ *  health. Best-effort: a failure to write the status never fails a delivery. */
+export async function recordWebhookResult(id: string, status: number): Promise<void> {
+  if (!isUuid(id)) return;
+  await sbUpdate('gt_webhooks', `id=eq.${id}`, { last_status: status, last_at: nowIso() }).catch(() => []);
+}
+
+/** One booking as webhook data, by id, scoped to the operator. The source for a
+ *  booking.updated event; joins the same trip/operator/package/promo a
+ *  confirmation shows. Returns null if the id is not this operator's. */
+export async function getBookingEventData(bookingId: string, operatorId: string): Promise<import('./webhooks.ts').BookingEventData | null> {
+  if (!isUuid(bookingId) || !isUuid(operatorId)) return null;
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?id=eq.${bookingId}&operator_id=eq.${operatorId}` +
+      `&select=reference,status,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,` +
+      `package:gt_packages(name),promo:gt_promo_codes(code),` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const pkg = (r.package ?? null) as Record<string, unknown> | null;
+  const promo = (r.promo ?? null) as Record<string, unknown> | null;
+  return {
+    reference: String(r.reference ?? ''),
+    status: String(r.status ?? ''),
+    trip: String(trip.title ?? ''),
+    operator: String(op.name ?? ''),
+    party_size: Number(r.party_size ?? 0),
+    currency: String(r.currency ?? 'gbp'),
+    total_pence: (r.total_pence as number) ?? null,
+    deposit_pence: (r.deposit_pence as number) ?? null,
+    starts_on: (dep.starts_on as string) ?? null,
+    ends_on: (dep.ends_on as string) ?? null,
+    lead_name: (r.traveller_name as string) ?? null,
+    lead_email: (r.traveller_email as string) ?? null,
+    package: pkg?.name ? String(pkg.name) : null,
+    promo: promo?.code ? String(promo.code) : null,
+  };
+}
+
+/** Booking event data plus the owning operator, by booking id alone. Used on the
+ *  booking.created path, which runs on our own server immediately after a
+ *  successful hold and so has no operator session to scope by. */
+export async function getBookingEventById(
+  bookingId: string,
+): Promise<{ operatorId: string; data: import('./webhooks.ts').BookingEventData } | null> {
+  if (!isUuid(bookingId)) return null;
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?id=eq.${bookingId}` +
+      `&select=operator_id,reference,status,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,` +
+      `package:gt_packages(name),promo:gt_promo_codes(code),` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r || !r.operator_id) return null;
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const pkg = (r.package ?? null) as Record<string, unknown> | null;
+  const promo = (r.promo ?? null) as Record<string, unknown> | null;
+  return {
+    operatorId: String(r.operator_id),
+    data: {
+      reference: String(r.reference ?? ''),
+      status: String(r.status ?? ''),
+      trip: String(trip.title ?? ''),
+      operator: String(op.name ?? ''),
+      party_size: Number(r.party_size ?? 0),
+      currency: String(r.currency ?? 'gbp'),
+      total_pence: (r.total_pence as number) ?? null,
+      deposit_pence: (r.deposit_pence as number) ?? null,
+      starts_on: (dep.starts_on as string) ?? null,
+      ends_on: (dep.ends_on as string) ?? null,
+      lead_name: (r.traveller_name as string) ?? null,
+      lead_email: (r.traveller_email as string) ?? null,
+      package: pkg?.name ? String(pkg.name) : null,
+      promo: promo?.code ? String(promo.code) : null,
+    },
+  };
 }
 
 /** The statuses an operator may set by hand from the Manage table. These are the

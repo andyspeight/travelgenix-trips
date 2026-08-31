@@ -47,6 +47,21 @@ export interface OperatorBrand {
   replyTo?: string;
 }
 
+/** One outbound webhook endpoint an operator has registered. `secret` is only
+ *  ever surfaced once at creation; list views carry it redacted. events is the
+ *  subscription filter; last_status / last_at are the most recent delivery. */
+export interface Webhook {
+  id: string;
+  operator_id: string;
+  url: string;
+  secret: string;
+  events: string[];
+  active: boolean;
+  last_status: number | null;
+  last_at: string | null;
+  created_at: string;
+}
+
 export interface Trip {
   id: string;
   operator_id: string;

@@ -21,6 +21,7 @@ import { takeHold, getConfirmation, joinWaitlist, getBookingOperatorContact, che
 import { holdMessage } from '@/lib/hold';
 import { fail, type ActionState } from '@/lib/action-state';
 import { sendTravellerConfirmation, sendOperatorNotice } from '@/lib/notify';
+import { dispatchBookingEventById } from '@/lib/dispatch';
 // A 'use server' module may export ONLY async functions. The state shape and its
 // empty value therefore live in action-state.ts, not here: a plain const or
 // interface exported from this file does not survive the client boundary, and a
@@ -103,6 +104,9 @@ export async function createBookingAction(_prev: ActionState, form: FormData): P
         await sendOperatorNotice({ ...ctx, operatorReplyTo: opc.replyTo }, opc.email);
       }
     }
+    // Fire the booking.created webhook to any endpoint the operator has wired up.
+    // A no-op if none; never allowed to fail the booking.
+    await dispatchBookingEventById(outcome.booking.id, 'booking.created');
   } catch {
     // Swallowed: the hold stands regardless.
   }

@@ -40,6 +40,7 @@ export default async function BookingsPage() {
         <a href="/console/bookings" aria-current="page">Bookings</a>
         <a href="/console/reports">Reports</a>
         <a href="/console/team">Team</a>
+        <a href="/console/integrations">Integrations</a>
       </nav>
 
       <h1>Bookings</h1>
