@@ -12,8 +12,12 @@
   h1 { font-size: 2rem; letter-spacing: -.02em; margin: 0 0 10px; }
   p.lede { color: #4b5563; line-height: 1.6; max-width: 60ch; margin: 0 0 32px; }
   .embed-wrap { display: flex; justify-content: flex-start; }
-  .note { margin-top: 40px; font-size: 13px; color: #6b7280; }
+  .note { margin-top: 14px; font-size: 13px; color: #6b7280; }
   code { background: #eef0f3; padding: 2px 6px; border-radius: 5px; font-size: 12.5px; }
+  h2 { font-size: 1.25rem; letter-spacing: -.01em; margin: 56px 0 6px; }
+  h2:first-of-type { margin-top: 44px; }
+  .sub { color: #4b5563; margin: 0 0 18px; font-size: 14.5px; }
+  .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -30,10 +34,26 @@
       <!-- The whole embed: a container plus one script. -->
       <div data-tg-trip="8040a51f-c4da-47ae-9c39-1dcb44aa1e1f"></div>
     </div>
-
     <p class="note">
-      Snippet: <code>&lt;div data-tg-trip="TRIP_ID"&gt;&lt;/div&gt;</code> then
-      <code>&lt;script src="/embed.js" defer&gt;&lt;/script&gt;</code>.
+      Card: <code>&lt;div data-tg-trip="TRIP_ID"&gt;&lt;/div&gt;</code>
+    </p>
+
+    <h2>All our trips</h2>
+    <p class="sub">A grid of everything this operator has on sale, by operator slug.</p>
+    <div data-tg-trips="global-travel-solution"></div>
+    <p class="note">
+      Grid: <code>&lt;div data-tg-trips="OPERATOR_SLUG"&gt;&lt;/div&gt;</code>
+    </p>
+
+    <h2>Already have a trip page?</h2>
+    <p class="sub">Drop in just the button next to your own content. It opens the same booking overlay.</p>
+    <div class="row">
+      <span>Ready to travel with us?</span>
+      <div data-tg-book="8040a51f-c4da-47ae-9c39-1dcb44aa1e1f"></div>
+    </div>
+    <p class="note">
+      Button: <code>&lt;div data-tg-book="TRIP_ID"&gt;&lt;/div&gt;</code>, then one
+      <code>&lt;script src="/embed.js" defer&gt;&lt;/script&gt;</code> for the whole page.
     </p>
   </div>
 

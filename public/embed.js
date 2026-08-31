@@ -1,21 +1,25 @@
 /**
- * Travelgenix Trips — embeddable trip card
+ * Travelgenix Trips — embeddable widgets
  * =============================================================================
  * The operator's own snippet, served from Trips itself (not tg-widgets). One
- * container div plus this script renders an operator-branded card for a trip,
- * and Reserve opens the hosted Trips booking flow in an overlay on the
- * operator's page, so the visitor never leaves their site and the traveller PII
- * stays on our origin.
+ * container div plus this script renders an operator-branded widget, and Reserve
+ * opens the hosted Trips booking flow in an overlay on the operator's page, so
+ * the visitor never leaves their site and the traveller PII stays on our origin.
  *
- *   <div data-tg-trip="TRIP_ID"></div>
+ * THREE widgets, one script. Put any of these on the page:
+ *
+ *   <div data-tg-trip="TRIP_ID"></div>            a single trip CARD
+ *   <div data-tg-trips="OPERATOR_SLUG"></div>     a GRID of an operator's trips
+ *   <div data-tg-book="TRIP_ID"></div>            a bare "Book" BUTTON
  *   <script src="https://trips.travelify.io/embed.js" defer></script>
  *
- * TRIP_ID is the trip's uuid (or a legacy tgw_ id). Optional attributes:
- *   data-tg-cta="Reserve a place"   the button label
+ * TRIP_ID is the trip's uuid (or a legacy tgw_ id); OPERATOR_SLUG is the
+ * operator's slug. Optional attributes on any container:
+ *   data-tg-cta="Reserve a place"   the button label (card + book)
  *   data-tg-api="https://..."       override the API origin (dev only)
  *
- * Reads GET {origin}/api/v1/trips/{id} — public, CORS-open, counts only. No
- * traveller data ever reaches this script.
+ * Reads GET {origin}/api/v1/trips/{id} and /api/v1/operators/{slug}/trips —
+ * public, CORS-open, counts only. No traveller data ever reaches this script.
  *
  * CSP-clean: no inline handlers, no injected <script>, no eval, no config
  * through innerHTML. Shadow DOM with :host{all:initial} so a host page's CSS
@@ -25,7 +29,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.2.0';
   if (window.__TG_TRIPS_EMBED_VERSION__) return; // double-load guard
   window.__TG_TRIPS_EMBED_VERSION__ = VERSION;
 
@@ -126,23 +130,39 @@
     '.cta:active{transform:translateY(1px)}',
     '.cta:focus-visible{outline:2px solid var(--tg-accent,#0e6e5c);outline-offset:2px}',
     '.foot{font-size:11.5px;color:#8c9894;margin:10px 0 0;text-align:center}',
+    // Grid: cards fill the cell rather than cap at 420px.
+    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(288px,1fr));gap:18px}',
+    '.grid .c{max-width:none}',
+    '.grid-empty{padding:16px 18px;font-size:13px;color:#6b7671}',
+    // Bare book button (data-tg-book).
+    '.book{display:inline-block;font-family:var(--tg-font,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif);',
+    'font-size:15px;font-weight:600;cursor:pointer;color:#fff;background:var(--tg-accent,#0e6e5c);',
+    'border:0;border-radius:9px;padding:12px 20px;line-height:1.2}',
+    '.book:hover{filter:brightness(1.07)}',
+    '.book:active{transform:translateY(1px)}',
+    '.book:focus-visible{outline:2px solid var(--tg-accent,#0e6e5c);outline-offset:2px}',
     '.err{padding:16px 18px;font-size:13px;color:#6b7671;border:1px solid #e3e7ea;border-radius:12px;max-width:420px;background:#fff}',
   ].join('');
 
-  function renderCard(root, data, opts) {
-    var trip = data.trip || {};
-    var op = data.operator || {};
+  function addStyle(root) {
+    var style = document.createElement('style');
+    style.textContent = CARD_CSS;
+    root.appendChild(style);
+  }
+
+  // Build ONE card element (no <style>), wired to open the booking overlay. The
+  // operator is passed separately so the grid can reuse one operator across many
+  // trips without repeating it per item.
+  function buildCard(trip, op, departures, opts) {
+    trip = trip || {};
+    op = op || {};
     var brand = op.brand || {};
     var accent = hexColour(brand.primaryColour, '#0e6e5c');
     var hero = safeImg(trip.heroImageUrl);
     var logo = safeImg(brand.logoUrl);
-    var price = fromPrice(data.departures, trip.currency);
+    var price = fromPrice(departures, trip.currency);
     var duration = trip.content && typeof trip.content.durationText === 'string' ? trip.content.durationText : '';
     var where = [trip.location, duration].filter(Boolean).join('  ·  ');
-
-    var style = document.createElement('style');
-    style.textContent = CARD_CSS;
-    root.appendChild(style);
 
     var card = document.createElement('div');
     card.className = 'c';
@@ -160,28 +180,67 @@
       where ? '<p class="where">' + esc(where) + '</p>' : '',
       '<div class="meta">',
       '<span class="price">' + (price ? '<b>' + esc(price) + '</b><small>per person</small>' : '<b>On request</b>') + '</span>',
-      '<span class="dates">' + esc(nextDates(data.departures)) + '</span>',
+      '<span class="dates">' + esc(nextDates(departures)) + '</span>',
       '</div>',
       '<button class="cta" type="button">' + esc(opts.cta) + '</button>',
       '<p class="foot">Booking by ' + esc(op.name || 'the operator') + '</p>',
       '</div>',
     ].join('');
 
-    root.appendChild(card);
+    card.querySelector('.cta').addEventListener('click', function () {
+      openBooking(opts.base, op.slug, trip.slug, accent);
+    });
+    return card;
+  }
 
-    var btn = card.querySelector('.cta');
+  function renderCard(root, data, opts) {
+    addStyle(root);
+    root.appendChild(buildCard(data.trip, data.operator, data.departures, opts));
+  }
+
+  // A grid of one operator's published trips. listData = { operator, trips:[{trip,departures}] }.
+  function renderGrid(root, listData, opts) {
+    addStyle(root);
+    var op = listData.operator || {};
+    var items = (listData.trips || []).filter(function (it) { return it && it.trip; });
+    if (!items.length) {
+      var empty = document.createElement('div');
+      empty.className = 'grid-empty';
+      empty.textContent = 'No trips on sale just now. Please check back soon.';
+      root.appendChild(empty);
+      return;
+    }
+    var grid = document.createElement('div');
+    grid.className = 'grid';
+    for (var i = 0; i < items.length; i++) {
+      grid.appendChild(buildCard(items[i].trip, op, items[i].departures, opts));
+    }
+    root.appendChild(grid);
+  }
+
+  // A bare "Book" button that opens the overlay. For operators who already have
+  // their own trip page and only want the checkout.
+  function renderButton(root, data, opts) {
+    addStyle(root);
+    var trip = data.trip || {};
+    var op = data.operator || {};
+    var accent = hexColour((op.brand || {}).primaryColour, '#0e6e5c');
+    var btn = document.createElement('button');
+    btn.className = 'book';
+    btn.type = 'button';
+    btn.style.setProperty('--tg-accent', accent);
+    btn.textContent = opts.cta;
     btn.addEventListener('click', function () {
       openBooking(opts.base, op.slug, trip.slug, accent);
     });
+    root.appendChild(btn);
   }
 
   function renderError(root, message) {
-    var style = document.createElement('style');
-    style.textContent = CARD_CSS;
+    addStyle(root);
     var box = document.createElement('div');
     box.className = 'err';
     box.textContent = message;
-    root.appendChild(style);
     root.appendChild(box);
   }
 
@@ -256,24 +315,43 @@
     if (el.getAttribute('data-tg-mounted') === '1') return;
     el.setAttribute('data-tg-mounted', '1');
 
-    var id = el.getAttribute('data-tg-trip');
     var base = apiBase(el);
-    var cta = el.getAttribute('data-tg-cta') || 'Reserve a place';
     var root = el.attachShadow ? el.attachShadow({ mode: 'open' }) : el;
+    if (!base) { renderError(root, 'This trip could not be loaded.'); return; }
 
-    if (!id || !base) { renderError(root, 'This trip could not be loaded.'); return; }
+    // Which widget: a grid of an operator's trips, a bare book button, or a card.
+    var operatorSlug = el.getAttribute('data-tg-trips');
+    var bookId = el.getAttribute('data-tg-book');
+    var tripId = el.getAttribute('data-tg-trip');
+
+    if (operatorSlug) {
+      var gopts = { base: base, cta: el.getAttribute('data-tg-cta') || 'Reserve a place' };
+      fetch(base + '/api/v1/operators/' + encodeURIComponent(operatorSlug) + '/trips', { credentials: 'omit' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (data) {
+          if (!data || !data.trips) { renderError(root, 'These trips are not available.'); return; }
+          renderGrid(root, data, gopts);
+        })
+        .catch(function () { renderError(root, 'These trips could not be loaded right now.'); });
+      return;
+    }
+
+    var id = bookId || tripId;
+    if (!id) { renderError(root, 'This trip could not be loaded.'); return; }
+    var opts = { base: base, cta: el.getAttribute('data-tg-cta') || (bookId ? 'Book now' : 'Reserve a place') };
 
     fetch(base + '/api/v1/trips/' + encodeURIComponent(id), { credentials: 'omit' })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (data) {
         if (!data || !data.trip) { renderError(root, 'This trip is not available.'); return; }
-        renderCard(root, data, { base: base, cta: cta });
+        if (bookId) renderButton(root, data, opts);
+        else renderCard(root, data, opts);
       })
       .catch(function () { renderError(root, 'This trip could not be loaded right now.'); });
   }
 
   function init() {
-    var nodes = document.querySelectorAll('[data-tg-trip]');
+    var nodes = document.querySelectorAll('[data-tg-trip],[data-tg-trips],[data-tg-book]');
     for (var i = 0; i < nodes.length; i++) mount(nodes[i]);
   }
 
