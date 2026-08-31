@@ -1,7 +1,7 @@
 // TEMPORARY preview-only self-test — proves the whole webhook contract on the
 // real serverless runtime: node:crypto signs, the signed headers and body
 // survive an HTTP POST, and a receiver recomputing the signature over the
-// received timestamp+body matches. Removed after verification. 404 off preview.
+// received timestamp+body matches. Removed after verification. 404 off vercel.app.
 
 import { signBody, buildBookingEvent, SIGNATURE_HEADER, TIMESTAMP_HEADER, EVENT_HEADER } from '@/lib/webhooks';
 
@@ -25,7 +25,7 @@ export async function GET(req: Request): Promise<Response> {
   const ts = Math.floor(Date.now() / 1000).toString();
   const sig = signBody(secret, ts, body);
 
-  const res = await fetch(`${origin}/api/_wh_echo`, {
+  const res = await fetch(`${origin}/api/wh-echo`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', [EVENT_HEADER]: 'booking.created', [TIMESTAMP_HEADER]: ts, [SIGNATURE_HEADER]: sig },
     body,

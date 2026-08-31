@@ -1,7 +1,7 @@
 // TEMPORARY preview-only echo receiver — verifies live webhook delivery, then
 // removed. Reflects the signature headers and raw body it received so the
 // self-test can prove the signed payload survives transport. 404 anywhere but a
-// *.vercel.app preview host so it can never respond in production.
+// *.vercel.app host so it can never respond on a custom production domain.
 
 export const dynamic = 'force-dynamic';
 
