@@ -1033,6 +1033,10 @@ export interface Confirmation {
   traveller_email: string | null;
   trip_title: string;
   operator_name: string;
+  operator_logo_url: string | null;
+  operator_primary_colour: string | null;
+  operator_font: string | null;
+  operator_hide_powered_by: boolean;
   starts_on: string | null;
   ends_on: string | null;
   package_name: string | null;
@@ -1045,7 +1049,7 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
     `gt_bookings?reference=eq.${encodeURIComponent(reference)}` +
       `&select=reference,status,party_size,total_pence,deposit_pence,currency,hold_expires_at,` +
       `traveller_name,traveller_email,selected_options,package:gt_packages(name),promo:gt_promo_codes(code),` +
-      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name)))&limit=1`,
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title,operator:gt_operators(name,brand,hide_powered_by)))&limit=1`,
   ).catch(() => null);
 
   const r = rows?.[0];
@@ -1054,6 +1058,7 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
   const dep = (r.departure ?? {}) as Record<string, unknown>;
   const trip = (dep.trip ?? {}) as Record<string, unknown>;
   const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const brand = (op.brand ?? null) as OperatorBrand | null;
   const pkg = (r.package ?? null) as Record<string, unknown> | null;
   const promo = (r.promo ?? null) as Record<string, unknown> | null;
 
@@ -1069,6 +1074,10 @@ export async function getConfirmation(reference: string): Promise<Confirmation |
     traveller_email: (r.traveller_email as string) ?? null,
     trip_title: String(trip.title ?? 'your trip'),
     operator_name: String(op.name ?? 'the operator'),
+    operator_logo_url: brand?.logoUrl ?? null,
+    operator_primary_colour: brand?.primaryColour ?? null,
+    operator_font: brand?.fontFamily ?? null,
+    operator_hide_powered_by: Boolean(op.hide_powered_by),
     starts_on: (dep.starts_on as string) ?? null,
     ends_on: (dep.ends_on as string) ?? null,
     package_name: pkg?.name ? String(pkg.name) : null,
@@ -2237,6 +2246,13 @@ export async function findOperatorIdByApiKey(key: string): Promise<string | null
   // Best-effort usage touch; never blocks or fails the request.
   void sbUpdate('gt_api_keys', `id=eq.${row.id}`, { last_used_at: nowIso() }).catch(() => []);
   return row.operator_id;
+}
+
+/** The white-label toggle: hide or show the Powered by credit on public pages. */
+export async function setHidePoweredBy(operatorId: string, hide: boolean): Promise<boolean> {
+  if (!isUuid(operatorId)) return false;
+  const rows = await sbUpdate('gt_operators', `id=eq.${operatorId}`, { hide_powered_by: hide }).catch(() => []);
+  return rows.length > 0;
 }
 
 /** One booking as webhook data, by id, scoped to the operator. The source for a

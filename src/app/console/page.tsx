@@ -32,6 +32,7 @@ export default async function ConsolePage() {
         <a href="/console/reports">Reports</a>
         <a href="/console/team">Team</a>
         <a href="/console/integrations">Integrations</a>
+        <a href="/console/branding">Branding</a>
       </nav>
 
       <h1>Trips</h1>

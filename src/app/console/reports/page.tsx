@@ -33,6 +33,7 @@ export default async function ReportsPage() {
         <a href="/console/reports" aria-current="page">Reports</a>
         <a href="/console/team">Team</a>
         <a href="/console/integrations">Integrations</a>
+        <a href="/console/branding">Branding</a>
       </nav>
 
       <h1>Reports</h1>

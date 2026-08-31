@@ -62,6 +62,7 @@ export default async function IntegrationsPage() {
         <a href="/console/reports">Reports</a>
         <a href="/console/team">Team</a>
         <a href="/console/integrations" aria-current="page">Integrations</a>
+        <a href="/console/branding">Branding</a>
       </nav>
 
       <h1>Integrations</h1>

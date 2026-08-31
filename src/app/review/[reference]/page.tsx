@@ -14,6 +14,7 @@ import { getReviewContext, getOperatorById } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
+import { BrandMast, PoweredBy } from '@/lib/brand-ui';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { ReviewForm } from '../review-form';
 import type { Operator } from '@/lib/types';
@@ -39,15 +40,11 @@ export default async function ReviewPage({ params }: { params: Promise<{ referen
     <>
       {font.href && <link rel="stylesheet" href={font.href} />}
       <div className="t-page bk-page" style={{ ['--op-accent' as string]: accent, ['--op-font' as string]: font.stack }}>
-        <header className="t-mast">
-          <div className="t-mast-wrap">
-            <Link href={`/booked/${ref}`} className="bk-back">← Back to your booking</Link>
-          </div>
-        </header>
+        <BrandMast name={operator?.name ?? ctx.operatorName} logoUrl={operator?.brand?.logoUrl} />
 
         <div className="bk-wrap">
           <div className="bk-lede">
-            <p className="bk-op">{ctx.operatorName}</p>
+            <Link href={`/booked/${ref}`} className="bk-back">← Back to your booking</Link>
             <h1>How was {ctx.tripTitle}?</h1>
             <p className="bk-sub-line">Your review helps other travellers. It appears once {ctx.operatorName} has approved it.</p>
           </div>
@@ -61,6 +58,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ referen
             <ReviewForm reference={ref} defaultName={ctx.leadName ?? ''} />
           )}
         </div>
+        <PoweredBy hidden={operator?.hide_powered_by} />
       </div>
     </>
   );

@@ -14,6 +14,7 @@ import { getRegistrationContext, getOperatorById } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
+import { BrandMast, PoweredBy } from '@/lib/brand-ui';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { RegistrationForm, type SlotPrefill } from '../registration-form';
 import type { Operator } from '@/lib/types';
@@ -63,15 +64,11 @@ export default async function RegisterPage({ params }: { params: Promise<{ refer
     <>
       {font.href && <link rel="stylesheet" href={font.href} />}
       <div className="t-page bk-page" style={{ ['--op-accent' as string]: accent, ['--op-font' as string]: font.stack }}>
-        <header className="t-mast">
-          <div className="t-mast-wrap">
-            <Link href={`/booked/${ctx.booking.reference}`} className="bk-back">← Back to your confirmation</Link>
-          </div>
-        </header>
+        <BrandMast name={operator?.name ?? ctx.booking.operator_name} logoUrl={operator?.brand?.logoUrl} />
 
         <div className="bk-wrap">
           <div className="bk-lede">
-            <p className="bk-op">{ctx.booking.operator_name}</p>
+            <Link href={`/booked/${ctx.booking.reference}`} className="bk-back">← Back to your confirmation</Link>
             <h1>Complete your booking</h1>
             <p className="bk-sub-line">
               {ctx.booking.trip_title} · reference <strong>{ctx.booking.reference}</strong>
@@ -95,6 +92,7 @@ export default async function RegisterPage({ params }: { params: Promise<{ refer
             />
           )}
         </div>
+        <PoweredBy hidden={operator?.hide_powered_by} />
       </div>
     </>
   );

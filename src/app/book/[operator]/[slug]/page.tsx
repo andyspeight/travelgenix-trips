@@ -9,6 +9,7 @@ import { availabilityByDeparture } from '@/lib/availability';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { tripsDbConfigured } from '@/lib/supabase';
+import { BrandMast, PoweredBy } from '@/lib/brand-ui';
 import { BookingForm } from '../../form';
 import { WaitlistForm } from '../../waitlist-form';
 
@@ -53,15 +54,11 @@ export default async function BookPage({
     <>
       {font.href && <link rel="stylesheet" href={font.href} />}
       <div className="t-page bk-page" style={{ ['--op-accent' as string]: accent, ['--op-font' as string]: font.stack }}>
-        <header className="t-mast">
-          <div className="t-mast-wrap">
-            <a href={`/trip/${operator.slug}/${trip.slug}`} className="bk-back">← {trip.title}</a>
-          </div>
-        </header>
+        <BrandMast name={operator.name} logoUrl={operator.brand?.logoUrl} />
 
         <div className="bk-wrap">
           <div className="bk-lede">
-            <p className="bk-op">{operator.name}</p>
+            <a href={`/trip/${operator.slug}/${trip.slug}`} className="bk-back">← {trip.title}</a>
             <h1>Book {trip.title}</h1>
           </div>
 
@@ -71,6 +68,7 @@ export default async function BookPage({
             <BookingForm tripId={trip.id} departures={bookable} packages={packages} options={options} currency={trip.currency} initialDeparture={departure} />
           )}
         </div>
+        <PoweredBy hidden={operator.hide_powered_by} />
       </div>
     </>
   );

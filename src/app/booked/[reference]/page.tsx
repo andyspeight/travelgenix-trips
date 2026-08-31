@@ -11,6 +11,9 @@ import { notFound } from 'next/navigation';
 import { getConfirmation, getChecklist } from '@/lib/repo';
 import { normaliseReference } from '@/lib/booking';
 import { format as money } from '@/lib/money';
+import { readableOn } from '@/lib/colour';
+import { operatorFont } from '@/lib/fonts';
+import { BrandMast, PoweredBy } from '@/lib/brand-ui';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { Checklist } from '../checklist';
 
@@ -53,9 +56,17 @@ export default async function BookedPage({
       : null;
   const balance = money(balancePence, c.currency);
 
+  // The confirmation wears the operator's brand too, so the whole journey holds
+  // together from the trip page to here.
+  const accent = readableOn(c.operator_primary_colour, '#ffffff', '#0e6e5c');
+  const font = operatorFont(c.operator_font);
+
   return (
-    <div className="t-page bk-page">
-      <div className="bk-wrap bk-confirm">
+    <>
+      {font.href && <link rel="stylesheet" href={font.href} />}
+      <div className="t-page bk-page" style={{ ['--op-accent' as string]: accent, ['--op-font' as string]: font.stack }}>
+        <BrandMast name={c.operator_name} logoUrl={c.operator_logo_url} />
+        <div className="bk-wrap bk-confirm">
         <div className={`bk-tick${dead ? ' bk-tick--dead' : ''}`} aria-hidden="true">
           {dead ? (
             <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -115,8 +126,10 @@ export default async function BookedPage({
         {!dead && checklist.length > 0 && <Checklist reference={c.reference} items={checklist} />}
 
         {!dead && <p className="bk-note">No card has been charged. Online payment is coming soon.</p>}
+        </div>
+        <PoweredBy hidden={c.operator_hide_powered_by} />
       </div>
-    </div>
+    </>
   );
 }
 

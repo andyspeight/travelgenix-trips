@@ -23,6 +23,8 @@ export interface Operator {
   brand: OperatorBrand;
   plan_band: PlanBand;
   custom_domain: string | null;
+  /** White-label toggle: when true, public pages omit the Powered by credit. */
+  hide_powered_by: boolean;
 }
 
 /** A person's authority inside one operator's Trips console. owner manages the

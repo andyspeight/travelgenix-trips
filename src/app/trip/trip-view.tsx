@@ -18,6 +18,7 @@ import { format as money } from '@/lib/money';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { safeImageUrl, isVideoUrl } from '@/lib/url';
+import { PoweredBy } from '@/lib/brand-ui';
 import type { Departure, TripContent, TripSection, Operator, Trip, Package, ReviewSummary } from '@/lib/types';
 import type { Availability } from '@/lib/capacity';
 import { starParts } from '@/lib/reviews';
@@ -297,6 +298,7 @@ export function TripView({
             <p className="t-foot">{trip.title} is operated by {operator.name}.</p>
           </main>
         </div>
+        <PoweredBy hidden={operator.hide_powered_by} />
       </div>
     </>
   );

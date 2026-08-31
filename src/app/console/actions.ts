@@ -69,6 +69,7 @@ import {
   getBookingEventData,
   createApiKey,
   revokeApiKey,
+  setHidePoweredBy,
 } from '@/lib/repo';
 import { dispatchBookingEvent, deliverOne } from '@/lib/dispatch';
 import { genSecret, buildBookingEvent, isWebhookEvent } from '@/lib/webhooks';
@@ -681,4 +682,17 @@ export async function revokeApiKeyAction(form: FormData): Promise<void> {
   if (!ctx) return;
   await revokeApiKey(ctx.operatorId, String(form.get('id') || ''));
   revalidatePath('/console/integrations');
+}
+
+// ---------------------------------------------------------------------------
+//  Branding — owner-only. The white-label toggle for public pages.
+// ---------------------------------------------------------------------------
+
+export async function setPoweredByAction(form: FormData): Promise<void> {
+  const ctx = await requireOwner();
+  if (!ctx) return;
+  // The checkbox means "show the credit"; hide_powered_by is its inverse.
+  const show = form.get('show') != null;
+  await setHidePoweredBy(ctx.operatorId, !show);
+  revalidatePath('/console/branding');
 }
