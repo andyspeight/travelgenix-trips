@@ -21,6 +21,8 @@ import { slugify } from './validate.ts';
 import { format as fmtMoney } from './money.ts';
 import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput, ReviewInput, TaskInput } from './validate.ts';
 import { summariseRatings } from './reviews.ts';
+import { shortRange } from './participants.ts';
+import type { BookingFinanceRow } from './finance.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
@@ -2013,6 +2015,43 @@ export async function getOperatorReport(operatorId: string): Promise<OperatorRep
     currency: [...currencies][0] ?? 'gbp',
     mixedCurrency: currencies.size > 1,
   };
+}
+
+/** Every booking the operator owns, as finance rows for the bookings ledger
+ *  export. All statuses (a full record, including cancelled), newest first. The
+ *  collected / outstanding maths lives in lib/finance so it stays tested. */
+export async function listOperatorBookingsForExport(operatorId: string): Promise<BookingFinanceRow[]> {
+  if (!isUuid(operatorId)) return [];
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?operator_id=eq.${operatorId}` +
+      `&select=reference,status,party_size,total_pence,deposit_pence,currency,traveller_name,traveller_email,created_at,` +
+      `package:gt_packages(name),promo:gt_promo_codes(code),` +
+      `departure:gt_departures(starts_on,ends_on,trip:gt_trips(title))` +
+      `&order=created_at.desc&limit=5000`,
+  ).catch(() => null);
+
+  return (rows ?? []).map((r) => {
+    const dep = (r.departure ?? {}) as Record<string, unknown>;
+    const trip = (dep.trip ?? {}) as Record<string, unknown>;
+    const pkg = (r.package ?? null) as Record<string, unknown> | null;
+    const promo = (r.promo ?? null) as Record<string, unknown> | null;
+    const starts = (dep.starts_on as string) ?? '';
+    return {
+      reference: String(r.reference ?? ''),
+      trip: String(trip.title ?? ''),
+      buyer: (r.traveller_name as string) ?? '',
+      email: (r.traveller_email as string) ?? '',
+      dates: starts ? shortRange(starts, (dep.ends_on as string) ?? null) : '',
+      party: Number(r.party_size ?? 0),
+      room: pkg?.name ? String(pkg.name) : '',
+      promo: promo?.code ? String(promo.code) : '',
+      status: String(r.status),
+      currency: String(r.currency ?? 'gbp'),
+      total_pence: (r.total_pence as number) ?? 0,
+      deposit_pence: (r.deposit_pence as number) ?? 0,
+      booked_on: String(r.created_at ?? '').slice(0, 10),
+    };
+  });
 }
 
 /** The statuses an operator may set by hand from the Manage table. These are the

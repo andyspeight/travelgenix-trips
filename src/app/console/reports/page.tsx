@@ -48,6 +48,11 @@ export default async function ReportsPage() {
         <div><dt>Travellers</dt><dd>{report.totals.heads}</dd></div>
       </dl>
 
+      <div className="c-actions" style={{ marginTop: 0 }}>
+        <a className="c-btn" href="/console/bookings.csv">Download bookings (CSV)</a>
+        <span className="c-hint">A finance ledger of every booking, for your accounts or QuickBooks and Xero.</span>
+      </div>
+
       <h2 style={{ fontSize: '1rem' }}>By trip</h2>
       {report.rows.length === 0 ? (
         <p className="c-empty">No live bookings yet. This fills in as travellers book.</p>
