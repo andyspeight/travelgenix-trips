@@ -405,6 +405,47 @@ export function validateOption(raw: Record<string, unknown>): Validated<OptionIn
   };
 }
 
+// ---------------------------------------------------------------------------
+//  Reviews (public input — left by a real booker, reference-gated)
+// ---------------------------------------------------------------------------
+
+export interface ReviewInput {
+  reviewer_name: string;
+  rating: number;
+  title: string | null;
+  body: string;
+}
+
+export function validateReview(raw: Record<string, unknown>): Validated<ReviewInput> {
+  const errors: FieldErrors = {};
+
+  const reviewer_name = text(raw.reviewer_name);
+  if (!reviewer_name) errors.reviewer_name = 'Please give your name.';
+  else if (reviewer_name.length > 120) errors.reviewer_name = 'That name is too long.';
+
+  const ratingRaw = text(raw.rating);
+  const rating = Number.parseInt(ratingRaw, 10);
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) errors.rating = 'Please choose a rating from one to five stars.';
+
+  const title = text(raw.title).slice(0, 160);
+
+  const body = text(raw.body);
+  if (!body) errors.body = 'Please write a little about your trip.';
+  else if (body.length < 4) errors.body = 'A few more words would help other travellers.';
+  else if (body.length > 2000) errors.body = 'Please keep your review under 2000 characters.';
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      reviewer_name,
+      rating: Number.isFinite(rating) && rating >= 1 && rating <= 5 ? rating : 0,
+      title: title || null,
+      body: body.slice(0, 2000),
+    },
+  };
+}
+
 export function validatePackage(raw: Record<string, unknown>): Validated<PackageInput> {
   const errors: FieldErrors = {};
 

@@ -13,25 +13,38 @@
 //  VARIANCE 6 · MOTION 4 · DENSITY 4 · RECIPE none
 // =============================================================================
 
+import type { ReactNode } from 'react';
 import { format as money } from '@/lib/money';
 import { readableOn } from '@/lib/colour';
 import { operatorFont } from '@/lib/fonts';
 import { safeImageUrl, isVideoUrl } from '@/lib/url';
-import type { Departure, TripContent, TripSection, Operator, Trip, Package } from '@/lib/types';
+import type { Departure, TripContent, TripSection, Operator, Trip, Package, ReviewSummary } from '@/lib/types';
 import type { Availability } from '@/lib/capacity';
+import { starParts } from '@/lib/reviews';
+
+/** A public review as the trip page shows it (no ids, no booking). */
+export interface PublicReview {
+  id: string;
+  reviewer_name: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  created_at: string;
+}
 
 // Trip pages are deliberately light-only, so this is the ground every operator
 // colour is checked against. See the note at the top of trip.css.
 export const PAGE_BACKGROUND = '#ffffff';
 
 export function TripView({
-  operator, trip, departures, availability, packages = [],
+  operator, trip, departures, availability, packages = [], reviews,
 }: {
   operator: Operator;
   trip: Trip;
   departures: Departure[];
   availability: Map<string, Availability>;
   packages?: Package[];
+  reviews?: { summary: ReviewSummary; reviews: PublicReview[] };
 }) {
   const content: TripContent = trip.content ?? {};
 
@@ -256,6 +269,31 @@ export function TripView({
               </section>
             )}
 
+            {reviews && reviews.reviews.length > 0 && (
+              <section>
+                <h2>Reviews</h2>
+                <div className="t-rev-head">
+                  <Stars average={reviews.summary.average} />
+                  <span className="t-rev-avg">{reviews.summary.average.toFixed(1)}</span>
+                  <span className="t-rev-count">
+                    {reviews.summary.count} {reviews.summary.count === 1 ? 'review' : 'reviews'} from travellers who booked
+                  </span>
+                </div>
+                <ul className="t-reviews">
+                  {reviews.reviews.map((r) => (
+                    <li key={r.id} className="t-review">
+                      <div className="t-review-top">
+                        <Stars average={r.rating} small />
+                        {r.title && <strong className="t-review-title">{r.title}</strong>}
+                      </div>
+                      <p className="t-review-body">{r.body}</p>
+                      <p className="t-review-by">{r.reviewer_name} · {reviewDate(r.created_at)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             <p className="t-foot">{trip.title} is operated by {operator.name}.</p>
           </main>
         </div>
@@ -425,4 +463,35 @@ function formatRange(startIso: string, endIso: string): string {
     : start.toLocaleDateString('en-GB', opts);
   const right = end.toLocaleDateString('en-GB', { ...opts, year: 'numeric' });
   return `${left} to ${right}`;
+}
+
+/** A row of five stars for an average (or a whole rating), full / half / empty. */
+function Stars({ average, small }: { average: number; small?: boolean }) {
+  const { full, half, empty } = starParts(average);
+  const size = small ? 15 : 18;
+  const star = (fill: 'full' | 'half' | 'empty', key: number) => (
+    <svg key={key} viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" className="t-star">
+      {fill === 'half' && (
+        <defs>
+          <linearGradient id={`half${size}`}>
+            <stop offset="50%" stopColor="currentColor" />
+            <stop offset="50%" stopColor="transparent" />
+          </linearGradient>
+        </defs>
+      )}
+      <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18.9 6.1 21l1.2-6.5L2.5 9.9l6.6-.9z"
+        fill={fill === 'full' ? 'currentColor' : fill === 'half' ? `url(#half${size})` : 'none'}
+        stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  );
+  const stars: ReactNode[] = [];
+  let k = 0;
+  for (let i = 0; i < full; i++) stars.push(star('full', k++));
+  if (half) stars.push(star('half', k++));
+  for (let i = 0; i < empty; i++) stars.push(star('empty', k++));
+  return <span className="t-stars" role="img" aria-label={`${average.toFixed(1)} out of 5 stars`}>{stars}</span>;
+}
+
+function reviewDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }

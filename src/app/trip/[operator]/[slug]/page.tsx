@@ -8,7 +8,7 @@
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getPublishedTrip, listOpenDepartures, listPackages } from '@/lib/repo';
+import { getPublishedTrip, listOpenDepartures, listPackages, getApprovedReviews } from '@/lib/repo';
 import { availabilityByDeparture } from '@/lib/availability';
 import { isVideoUrl } from '@/lib/url';
 import { tripsDbConfigured } from '@/lib/supabase';
@@ -45,6 +45,7 @@ export default async function TripPage({ params }: { params: Promise<Params> }) 
   const departures = await listOpenDepartures(trip.id);
   const availability = await availabilityByDeparture(departures);
   const packages = await listPackages(trip.id);
+  const reviews = await getApprovedReviews(trip.id);
 
-  return <TripView operator={operator} trip={trip} departures={departures} availability={availability} packages={packages} />;
+  return <TripView operator={operator} trip={trip} departures={departures} availability={availability} packages={packages} reviews={reviews} />;
 }

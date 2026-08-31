@@ -281,6 +281,19 @@
 
 .t-foot { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--op-rule); font-size: 13px; color: var(--op-muted); }
 
+/* --- reviews (public trip page) --- */
+.t-stars { display: inline-flex; color: #f5a623; vertical-align: middle; }
+.t-star { display: block; }
+.t-rev-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 18px; }
+.t-rev-avg { font-weight: 700; font-size: 1.1rem; font-variant-numeric: tabular-nums; color: var(--op-ink); }
+.t-rev-count { color: var(--op-muted); font-size: 14px; }
+.t-reviews { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.t-review { border: 1px solid var(--op-rule); border-radius: 10px; padding: 16px 18px; background: #fff; }
+.t-review-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.t-review-title { font-size: 15px; color: var(--op-ink); }
+.t-review-body { margin: 0; color: var(--op-ink-2); line-height: 1.55; white-space: pre-line; }
+.t-review-by { margin: 8px 0 0; font-size: 13px; color: var(--op-muted); }
+
 /* =============================================================================
    Booking checkout + confirmation (/book, /booked). Share .t-page so they
    inherit the operator palette and font.
@@ -402,6 +415,12 @@
   background: #fff; font-family: var(--op-font, inherit); font-style: italic;
 }
 .reg-sign-name:focus { outline: 2px solid var(--op-accent); outline-offset: 1px; border-color: transparent; }
+
+/* review form: star picker */
+.rv-stars { display: flex; gap: 4px; margin-top: 4px; }
+.rv-star { background: 0; border: 0; padding: 2px; cursor: pointer; color: var(--op-hairline, #d4d9dd); line-height: 0; border-radius: 6px; }
+.rv-star--on { color: #f5a623; }
+.rv-star:focus-visible { outline: 2px solid var(--op-accent); outline-offset: 2px; }
 
 /* document upload field */
 .reg-doc { gap: 8px; }

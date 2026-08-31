@@ -19,12 +19,13 @@ import 'server-only';
 import { sbRequest, sbInsert, sbUpdate, SupabaseError } from './supabase.ts';
 import { slugify } from './validate.ts';
 import { format as fmtMoney } from './money.ts';
-import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput } from './validate.ts';
+import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput, ReviewInput } from './validate.ts';
+import { summariseRatings } from './reviews.ts';
 import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary } from './types.ts';
 import { deleteDocument } from './storage.ts';
 import { resolveOperatorRole, emailKey } from './members.ts';
 import type { Session } from './auth.ts';
@@ -641,6 +642,142 @@ export async function getDocumentForOperator(documentId: string, operatorId: str
     `gt_documents?id=eq.${documentId}&operator_id=eq.${operatorId}&select=*&limit=1`,
   ).catch(() => null);
   return rows?.[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+//  Reviews (gt_018). Collected reference-gated (only a real booker), moderated
+//  by the operator, shown publicly only when approved. Two trust models again:
+//  the public collection resolves everything from the booking reference; the
+//  moderation reads/writes are operator-gated.
+// ---------------------------------------------------------------------------
+
+export interface ReviewContext {
+  bookingId: string;
+  operatorId: string;
+  tripId: string;
+  tripTitle: string;
+  operatorName: string;
+  leadName: string | null;
+  alreadyReviewed: boolean;
+}
+
+/** Resolve and authorise leaving a review from a booking reference. Null when the
+ *  reference names no live booking, so a guessed reference can review nothing. */
+export async function getReviewContext(reference: string): Promise<ReviewContext | null> {
+  const ref = String(reference || '');
+  if (!ref) return null;
+
+  const rows = await sbRequest<Array<Record<string, unknown>>>(
+    `gt_bookings?reference=eq.${encodeURIComponent(ref)}` +
+      `&select=id,status,operator_id,traveller_name,` +
+      `departure:gt_departures(trip:gt_trips(id,title,operator:gt_operators(name)))&limit=1`,
+  ).catch(() => null);
+  const r = rows?.[0];
+  if (!r) return null;
+
+  const status = String(r.status);
+  if (status === 'expired' || status === 'cancelled') return null;
+
+  const operatorId = (r.operator_id as string) ?? '';
+  const dep = (r.departure ?? {}) as Record<string, unknown>;
+  const trip = (dep.trip ?? {}) as Record<string, unknown>;
+  const op = (trip.operator ?? {}) as Record<string, unknown>;
+  const tripId = String(trip.id ?? '');
+  if (!isUuid(operatorId) || !isUuid(tripId)) return null;
+
+  const existing = await sbRequest<Array<{ id: string }>>(
+    `gt_reviews?booking_id=eq.${r.id}&select=id&limit=1`,
+  ).catch(() => null);
+
+  return {
+    bookingId: String(r.id),
+    operatorId,
+    tripId,
+    tripTitle: String(trip.title ?? 'your trip'),
+    operatorName: String(op.name ?? 'the operator'),
+    leadName: (r.traveller_name as string) ?? null,
+    alreadyReviewed: Boolean(existing?.length),
+  };
+}
+
+/** Record a review from a booking reference. Returns 'ok', 'exists' (already
+ *  reviewed), or 'not_allowed' (no live booking behind the reference). */
+export async function submitReview(reference: string, input: ReviewInput): Promise<'ok' | 'exists' | 'not_allowed'> {
+  const ctx = await getReviewContext(reference);
+  if (!ctx) return 'not_allowed';
+  if (ctx.alreadyReviewed) return 'exists';
+
+  try {
+    const rows = await sbInsert<Review>('gt_reviews', {
+      operator_id: ctx.operatorId,
+      trip_id: ctx.tripId,
+      booking_id: ctx.bookingId,
+      reviewer_name: input.reviewer_name,
+      rating: input.rating,
+      title: input.title,
+      body: input.body,
+      status: 'pending',
+    });
+    return rows[0] ? 'ok' : 'not_allowed';
+  } catch (err) {
+    // The unique index turns a double submission into a clean "already reviewed".
+    if (err instanceof SupabaseError && err.statusCode === 409) return 'exists';
+    throw err;
+  }
+}
+
+/** Every review on a trip, any status, for the operator's moderation screen. */
+export async function listTripReviews(tripId: string, operatorId: string): Promise<Review[]> {
+  if (!(await getTripOwned(tripId, operatorId))) return [];
+  return (
+    (await sbRequest<Review[]>(
+      `gt_reviews?trip_id=eq.${tripId}&operator_id=eq.${operatorId}&select=*&order=created_at.desc`,
+    ).catch(() => null)) ?? []
+  );
+}
+
+export async function setReviewStatus(
+  reviewId: string,
+  operatorId: string,
+  status: ReviewStatus,
+): Promise<Review | null> {
+  if (!isUuid(reviewId)) return null;
+  if (!['pending', 'approved', 'hidden'].includes(status)) return null;
+  const rows = await sbUpdate<Review>(
+    'gt_reviews',
+    `id=eq.${reviewId}&operator_id=eq.${operatorId}`,
+    { status, updated_at: nowIso() },
+  );
+  return rows[0] ?? null;
+}
+
+export async function removeReview(reviewId: string, operatorId: string): Promise<boolean> {
+  if (!isUuid(reviewId)) return false;
+  await sbRequest(`gt_reviews?id=eq.${reviewId}&operator_id=eq.${operatorId}`, { method: 'DELETE' })
+    .catch(() => null);
+  return true;
+}
+
+/** Approved reviews for a trip, newest first, plus the star roll-up. Public: the
+ *  trip page and the reviews embed read this, so it never returns pending or
+ *  hidden ones and never any booking id. */
+export async function getApprovedReviews(
+  tripId: string,
+  limit = 50,
+): Promise<{ summary: ReviewSummary; reviews: Array<Pick<Review, 'id' | 'reviewer_name' | 'rating' | 'title' | 'body' | 'created_at'>> }> {
+  if (!isUuid(tripId)) return { summary: { average: 0, count: 0 }, reviews: [] };
+  const rows =
+    (await sbRequest<Review[]>(
+      `gt_reviews?trip_id=eq.${tripId}&status=eq.approved` +
+        `&select=id,reviewer_name,rating,title,body,created_at&order=created_at.desc&limit=${Math.max(1, Math.min(200, limit))}`,
+    ).catch(() => null)) ?? [];
+  return {
+    summary: summariseRatings(rows.map((r) => r.rating)),
+    reviews: rows.map((r) => ({
+      id: r.id, reviewer_name: r.reviewer_name, rating: r.rating,
+      title: r.title, body: r.body, created_at: r.created_at,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------

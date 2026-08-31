@@ -311,6 +311,29 @@ export interface TripDocument {
   uploaded_at: string;
 }
 
+export type ReviewStatus = 'pending' | 'approved' | 'hidden';
+
+/** A verified trip review. Left reference-gated (only a real booker), tied to the
+ *  booking, and shown publicly only once the operator approves it. */
+export interface Review {
+  id: string;
+  operator_id: string;
+  trip_id: string;
+  booking_id: string | null;
+  reviewer_name: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  status: ReviewStatus;
+  created_at: string;
+}
+
+/** The public roll-up shown as a star rating: the average and how many count. */
+export interface ReviewSummary {
+  average: number;
+  count: number;
+}
+
 export type WaitlistStatus = 'waiting' | 'invited' | 'converted' | 'removed';
 
 export interface WaitlistEntry {

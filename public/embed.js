@@ -11,6 +11,7 @@
  *   <div data-tg-trip="TRIP_ID"></div>            a single trip CARD
  *   <div data-tg-trips="OPERATOR_SLUG"></div>     a GRID of an operator's trips
  *   <div data-tg-book="TRIP_ID"></div>            a bare "Book" BUTTON
+ *   <div data-tg-reviews="TRIP_ID"></div>         approved REVIEWS + a star rating
  *   <script src="https://trips.travelify.io/embed.js" defer></script>
  *
  * TRIP_ID is the trip's uuid (or a legacy tgw_ id); OPERATOR_SLUG is the
@@ -29,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.2.0';
+  var VERSION = '0.3.0';
   if (window.__TG_TRIPS_EMBED_VERSION__) return; // double-load guard
   window.__TG_TRIPS_EMBED_VERSION__ = VERSION;
 
@@ -141,6 +142,19 @@
     '.book:hover{filter:brightness(1.07)}',
     '.book:active{transform:translateY(1px)}',
     '.book:focus-visible{outline:2px solid var(--tg-accent,#0e6e5c);outline-offset:2px}',
+    // Reviews.
+    '.revw{font-family:var(--tg-font,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif);color:#12211f;max-width:720px}',
+    '.rv-sum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}',
+    '.rv-avg{font-weight:700;font-size:1.15rem;font-variant-numeric:tabular-nums}',
+    '.rv-cnt{font-size:14px;color:#6b7671}',
+    '.rv-stars{display:inline-flex;color:#f5a623;line-height:0}',
+    '.rv-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}',
+    '.rv-item{border:1px solid #e3e7ea;border-radius:10px;padding:14px 16px;background:#fff}',
+    '.rv-top{display:flex;align-items:center;gap:10px;margin-bottom:6px}',
+    '.rv-ttl{font-size:14.5px;font-weight:600}',
+    '.rv-body{margin:0;color:#3a4b47;line-height:1.55;white-space:pre-line;font-size:14.5px}',
+    '.rv-by{margin:8px 0 0;font-size:13px;color:#8c9894}',
+    '.rv-empty{font-size:14px;color:#6b7671}',
     '.err{padding:16px 18px;font-size:13px;color:#6b7671;border:1px solid #e3e7ea;border-radius:12px;max-width:420px;background:#fff}',
   ].join('');
 
@@ -236,6 +250,61 @@
     root.appendChild(btn);
   }
 
+  // --- reviews ---------------------------------------------------------------
+
+  var starSeq = 0;
+  function starSvg(fill) {
+    var gid = 'tgs' + (starSeq++);
+    var f = fill === 'full' ? 'currentColor' : fill === 'half' ? 'url(#' + gid + ')' : 'none';
+    var defs = fill === 'half'
+      ? '<defs><linearGradient id="' + gid + '"><stop offset="50%" stop-color="currentColor"/><stop offset="50%" stop-color="transparent"/></linearGradient></defs>'
+      : '';
+    return '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' + defs +
+      '<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18.9 6.1 21l1.2-6.5L2.5 9.9l6.6-.9z" fill="' + f +
+      '" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+  }
+
+  // Static SVG markup for a 0..5 value, rounded to the nearest half star.
+  function starsHtml(value) {
+    var a = Math.max(0, Math.min(5, typeof value === 'number' ? value : 0));
+    var halves = Math.round(a * 2);
+    var full = Math.floor(halves / 2), half = halves % 2 === 1, empty = 5 - full - (half ? 1 : 0);
+    var out = '<span class="rv-stars" role="img" aria-label="' + esc(a.toFixed(1)) + ' out of 5">';
+    for (var i = 0; i < full; i++) out += starSvg('full');
+    if (half) out += starSvg('half');
+    for (var j = 0; j < empty; j++) out += starSvg('empty');
+    return out + '</span>';
+  }
+
+  function renderReviews(root, data) {
+    addStyle(root);
+    var wrap = document.createElement('div');
+    wrap.className = 'revw';
+    var sum = data.summary || { average: 0, count: 0 };
+    var reviews = data.reviews || [];
+    if (!reviews.length) {
+      wrap.innerHTML = '<p class="rv-empty">No reviews yet.</p>';
+      root.appendChild(wrap);
+      return;
+    }
+    var head = '<div class="rv-sum">' + starsHtml(sum.average) +
+      '<span class="rv-avg">' + esc((sum.average || 0).toFixed(1)) + '</span>' +
+      '<span class="rv-cnt">' + esc(sum.count) + ' ' + (sum.count === 1 ? 'review' : 'reviews') + '</span></div>';
+    var items = '<ul class="rv-list">';
+    for (var i = 0; i < reviews.length; i++) {
+      var r = reviews[i] || {};
+      items += '<li class="rv-item"><div class="rv-top">' + starsHtml(r.rating) +
+        (r.title ? '<span class="rv-ttl">' + esc(r.title) + '</span>' : '') +
+        '</div><p class="rv-body">' + esc(r.body) + '</p>' +
+        '<p class="rv-by">' + esc(r.reviewer_name) + '</p></li>';
+    }
+    items += '</ul>';
+    // Every value above is esc()'d; the star markup is static, so this innerHTML
+    // carries no untrusted string.
+    wrap.innerHTML = head + items;
+    root.appendChild(wrap);
+  }
+
   function renderError(root, message) {
     addStyle(root);
     var box = document.createElement('div');
@@ -319,10 +388,22 @@
     var root = el.attachShadow ? el.attachShadow({ mode: 'open' }) : el;
     if (!base) { renderError(root, 'This trip could not be loaded.'); return; }
 
-    // Which widget: a grid of an operator's trips, a bare book button, or a card.
+    // Which widget: reviews, a grid of an operator's trips, a book button, or a card.
     var operatorSlug = el.getAttribute('data-tg-trips');
     var bookId = el.getAttribute('data-tg-book');
+    var reviewsId = el.getAttribute('data-tg-reviews');
     var tripId = el.getAttribute('data-tg-trip');
+
+    if (reviewsId) {
+      fetch(base + '/api/v1/trips/' + encodeURIComponent(reviewsId) + '/reviews', { credentials: 'omit' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function (data) {
+          if (!data || !data.reviews) { renderError(root, 'Reviews could not be loaded.'); return; }
+          renderReviews(root, data);
+        })
+        .catch(function () { renderError(root, 'Reviews could not be loaded right now.'); });
+      return;
+    }
 
     if (operatorSlug) {
       var gopts = { base: base, cta: el.getAttribute('data-tg-cta') || 'Reserve a place' };
@@ -351,7 +432,7 @@
   }
 
   function init() {
-    var nodes = document.querySelectorAll('[data-tg-trip],[data-tg-trips],[data-tg-book]');
+    var nodes = document.querySelectorAll('[data-tg-trip],[data-tg-trips],[data-tg-book],[data-tg-reviews]');
     for (var i = 0; i < nodes.length; i++) mount(nodes[i]);
   }
 

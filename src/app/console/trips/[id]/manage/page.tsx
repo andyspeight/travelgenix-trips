@@ -10,18 +10,18 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import {
-  ensureOperator, getTripManage, listWaitlist,
+  ensureOperator, getTripManage, listWaitlist, listTripReviews,
   listMessageTemplates, listTripMessages, broadcastSegments, type TripBooking,
 } from '@/lib/repo';
 import { participantRows } from '@/lib/participants';
 import { tripsDbConfigured } from '@/lib/supabase';
 import { format as money } from '@/lib/money';
 import { safeImageUrl } from '@/lib/url';
-import { setWaitlistStatusAction } from '../../../actions';
+import { setWaitlistStatusAction, setReviewStatusAction, removeReviewAction } from '../../../actions';
 import { SignInPrompt, NoOperator, DbMissing } from '../../../states';
 import { BookingsTable } from './bookings-table';
 import { MessagesTab } from './messages-tab';
-import type { WaitlistEntry } from '@/lib/types';
+import type { WaitlistEntry, Review } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +30,7 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelled', expired: 'Expired',
 };
 
-type Tab = 'bookings' | 'participants' | 'waitlist' | 'messages';
+type Tab = 'bookings' | 'participants' | 'waitlist' | 'messages' | 'reviews';
 
 export default async function ManageTripPage({
   params, searchParams,
@@ -43,6 +43,7 @@ export default async function ManageTripPage({
   const tab: Tab = tabRaw === 'participants' ? 'participants'
     : tabRaw === 'waitlist' ? 'waitlist'
     : tabRaw === 'messages' ? 'messages'
+    : tabRaw === 'reviews' ? 'reviews'
     : 'bookings';
 
   const session = await getSession();
@@ -62,6 +63,7 @@ export default async function ManageTripPage({
   const [templates, messages] = tab === 'messages'
     ? await Promise.all([listMessageTemplates(operator.id), listTripMessages(id, operator.id)])
     : [[], []];
+  const reviews = tab === 'reviews' ? await listTripReviews(id, operator.id) : [];
   const hero = safeImageUrl(trip.hero_image_url);
   const base = `/console/trips/${trip.id}/manage`;
 
@@ -114,6 +116,9 @@ export default async function ManageTripPage({
         <a href={`${base}?tab=messages`} aria-current={tab === 'messages' ? 'page' : undefined}>
           Messages
         </a>
+        <a href={`${base}?tab=reviews`} aria-current={tab === 'reviews' ? 'page' : undefined}>
+          Reviews
+        </a>
         <span className="mt-soon" title="Coming soon">Promote</span>
       </nav>
 
@@ -127,10 +132,67 @@ export default async function ManageTripPage({
         <ParticipantsTab bookings={bookings} tripId={trip.id} />
       ) : tab === 'waitlist' ? (
         <WaitlistTab entries={waitlist} tripId={trip.id} />
+      ) : tab === 'reviews' ? (
+        <ReviewsTab reviews={reviews} tripId={trip.id} />
       ) : (
         <MessagesTab tripId={trip.id} segments={broadcastSegments(bookings)} templates={templates} messages={messages} />
       )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+const REVIEW_PILL: Record<string, string> = { pending: 'Awaiting you', approved: 'Live', hidden: 'Hidden' };
+
+function ReviewsTab({ reviews, tripId }: { reviews: Review[]; tripId: string }) {
+  if (reviews.length === 0) {
+    return (
+      <p className="c-empty">
+        No reviews yet. After a trip, share the review link from a booking (or send it in a message) and
+        approved reviews will show on your trip page and in your reviews widget.
+      </p>
+    );
+  }
+  return (
+    <ul className="c-list">
+      {reviews.map((r) => (
+        <li key={r.id} style={r.status === 'hidden' ? { opacity: 0.6 } : undefined}>
+          <span className="c-name">
+            {'★'.repeat(r.rating)}<span style={{ color: 'var(--op-hairline, #d4d9dd)' }}>{'★'.repeat(5 - r.rating)}</span>
+            {r.title ? ` · ${r.title}` : ''}
+          </span>
+          <span className="c-meta">
+            {r.body.length > 160 ? `${r.body.slice(0, 160)}…` : r.body}
+            <br />— {r.reviewer_name}
+          </span>
+          <span className="c-right" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span className={`c-pill c-pill--rv-${r.status}`}>{REVIEW_PILL[r.status] ?? r.status}</span>
+            {r.status !== 'approved' && (
+              <form action={setReviewStatusAction}>
+                <input type="hidden" name="id" value={r.id} />
+                <input type="hidden" name="trip_id" value={tripId} />
+                <input type="hidden" name="status" value="approved" />
+                <button className="c-btn c-btn--quiet" type="submit">Approve</button>
+              </form>
+            )}
+            {r.status !== 'hidden' && (
+              <form action={setReviewStatusAction}>
+                <input type="hidden" name="id" value={r.id} />
+                <input type="hidden" name="trip_id" value={tripId} />
+                <input type="hidden" name="status" value="hidden" />
+                <button className="c-btn c-btn--quiet" type="submit">Hide</button>
+              </form>
+            )}
+            <form action={removeReviewAction}>
+              <input type="hidden" name="id" value={r.id} />
+              <input type="hidden" name="trip_id" value={tripId} />
+              <button className="c-btn c-btn--quiet" type="submit">Remove</button>
+            </form>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

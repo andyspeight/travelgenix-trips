@@ -317,6 +317,11 @@ h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 40px 0 12px; }
 .c-pill--wl-converted { color: var(--tg-accent); }
 .c-pill--wl-removed { color: var(--tg-muted); }
 
+/* review moderation pills */
+.c-pill--rv-pending { color: #8a6d0b; }
+.c-pill--rv-approved { color: var(--tg-accent); }
+.c-pill--rv-hidden { color: var(--tg-muted); }
+
 /* ---------------------------------------------------------------------------
    Messages tab — compose + templates/history sidebar.
    --------------------------------------------------------------------------- */

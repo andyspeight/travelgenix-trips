@@ -57,6 +57,8 @@ import {
   addOperatorMember,
   setOperatorMemberRole,
   removeOperatorMember,
+  setReviewStatus,
+  removeReview,
 } from '@/lib/repo';
 
 /** Turns FormData into a plain object the validators can read. */
@@ -376,6 +378,31 @@ export async function removeMemberAction(form: FormData): Promise<void> {
 
   await removeOperatorMember(String(form.get('id') || ''), ctx.operatorId);
   revalidatePath('/console/team');
+}
+
+// ---------------------------------------------------------------------------
+//  Reviews — operator moderation (approve / hide / remove).
+// ---------------------------------------------------------------------------
+
+export async function setReviewStatusAction(form: FormData): Promise<void> {
+  const ctx = await requireEditor();
+  if (!ctx) return;
+
+  const id = String(form.get('id') || '');
+  const tripId = String(form.get('trip_id') || '');
+  const status = String(form.get('status') || '');
+  if (status !== 'approved' && status !== 'hidden' && status !== 'pending') return;
+
+  await setReviewStatus(id, ctx.operatorId, status);
+  revalidatePath(`/console/trips/${tripId}/manage`);
+}
+
+export async function removeReviewAction(form: FormData): Promise<void> {
+  const ctx = await requireEditor();
+  if (!ctx) return;
+
+  await removeReview(String(form.get('id') || ''), ctx.operatorId);
+  revalidatePath(`/console/trips/${String(form.get('trip_id') || '')}/manage`);
 }
 
 // ---------------------------------------------------------------------------

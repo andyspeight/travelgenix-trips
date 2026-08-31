@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   slugify, isUsableSlug, isSafeHttpUrl, isRealDate, validateTrip, validateDeparture, validatePackage,
-  validateOption,
+  validateOption, validateReview,
 } from '../src/lib/validate.ts';
 
 // --------------------------------------------------------------------------
@@ -285,4 +285,30 @@ test('a blank option price means "no charge", not zero-as-error', () => {
 
 test('an option price beyond the ceiling is rejected', () => {
   assert.ok(validateOption({ name: 'Yacht', price_pence: '600000' }).errors.price_pence);
+});
+
+// --------------------------------------------------------------------------
+//  Reviews
+// --------------------------------------------------------------------------
+
+test('a good review validates', () => {
+  const r = validateReview({ reviewer_name: 'Ada Lovelace', rating: '5', title: 'Wonderful', body: 'A trip of a lifetime, every day was a highlight.' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.rating, 5);
+  assert.equal(r.value.title, 'Wonderful');
+});
+
+test('a review needs a name, a 1-5 rating and a body', () => {
+  assert.ok(validateReview({ reviewer_name: '', rating: '5', body: 'Great trip' }).errors.reviewer_name);
+  assert.ok(validateReview({ reviewer_name: 'Ada', rating: '0', body: 'Great trip' }).errors.rating);
+  assert.ok(validateReview({ reviewer_name: 'Ada', rating: '6', body: 'Great trip' }).errors.rating);
+  assert.ok(validateReview({ reviewer_name: 'Ada', rating: 'x', body: 'Great trip' }).errors.rating);
+  assert.ok(validateReview({ reviewer_name: 'Ada', rating: '5', body: '' }).errors.body);
+  assert.ok(validateReview({ reviewer_name: 'Ada', rating: '5', body: 'ok' }).errors.body, 'too short');
+});
+
+test('a review title is optional', () => {
+  const r = validateReview({ reviewer_name: 'Ada', rating: '4', body: 'Really enjoyed it.' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.title, null);
 });

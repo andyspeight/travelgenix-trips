@@ -3,7 +3,7 @@
  * Plugin Name:       Travelgenix Trips
  * Plugin URI:        https://trips.travelify.io
  * Description:       Embed your Travelgenix Trips as a trip card, a grid of your trips, or a Book button. Bookings open in an overlay, so travellers never leave your site.
- * Version:           0.2.0
+ * Version:           0.3.0
  * Requires at least: 5.6
  * Requires PHP:      7.2
  * Author:            Travelgenix
@@ -11,11 +11,12 @@
  * License:           GPL-2.0-or-later
  * Text Domain:       travelgenix-trips
  *
- * Three shortcodes, one script (loaded once, only on pages that use a shortcode):
+ * Four shortcodes, one script (loaded once, only on pages that use a shortcode):
  *
  *   [tg_trip id="TRIP_ID"]                 a single trip card
  *   [tg_trips operator="OPERATOR_SLUG"]    a grid of an operator's trips
  *   [tg_book id="TRIP_ID" label="Book"]    a bare Book button
+ *   [tg_reviews id="TRIP_ID"]              approved reviews and a star rating
  *
  * The script and the read-only trip API are served from the Trips origin
  * (https://trips.travelify.io by default). Override with the TG_TRIPS_ORIGIN
@@ -48,7 +49,7 @@ function tg_trips_register_assets() {
         'travelgenix-trips-embed',
         tg_trips_origin() . '/embed.js',
         array(),
-        '0.2.0',
+        '0.3.0',
         true // in the footer
     );
 }
@@ -128,3 +129,13 @@ function tg_trips_shortcode_book($atts) {
     ));
 }
 add_shortcode('tg_book', 'tg_trips_shortcode_book');
+
+/** [tg_reviews id="TRIP_ID"] approved reviews and a star rating */
+function tg_trips_shortcode_reviews($atts) {
+    $a = shortcode_atts(array('id' => ''), $atts, 'tg_reviews');
+    if ($a['id'] === '') {
+        return '';
+    }
+    return tg_trips_container(array('data-tg-reviews' => $a['id']));
+}
+add_shortcode('tg_reviews', 'tg_trips_shortcode_reviews');
