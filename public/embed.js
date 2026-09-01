@@ -6,12 +6,14 @@
  * opens the hosted Trips booking flow in an overlay on the operator's page, so
  * the visitor never leaves their site and the traveller PII stays on our origin.
  *
- * THREE widgets, one script. Put any of these on the page:
+ * SIX widgets, one script. Put any of these on the page:
  *
  *   <div data-tg-trip="TRIP_ID"></div>            a single trip CARD
  *   <div data-tg-trips="OPERATOR_SLUG"></div>     a GRID of an operator's trips
  *   <div data-tg-book="TRIP_ID"></div>            a bare "Book" BUTTON
  *   <div data-tg-reviews="TRIP_ID"></div>         approved REVIEWS + a star rating
+ *   <div data-tg-departures="TRIP_ID"></div>      the upcoming DEPARTURES with prices
+ *   <div data-tg-badge="TRIP_ID"></div>           a compact price + availability BADGE
  *   <script src="https://trips.travelify.io/embed.js" defer></script>
  *
  * TRIP_ID is the trip's uuid (or a legacy tgw_ id); OPERATOR_SLUG is the
@@ -30,7 +32,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.3.0';
+  var VERSION = '0.4.0';
   if (window.__TG_TRIPS_EMBED_VERSION__) return; // double-load guard
   window.__TG_TRIPS_EMBED_VERSION__ = VERSION;
 
@@ -70,7 +72,9 @@
       || host === 'images.unsplash.com'
       || host === 'images.pexels.com'
       || host === 'player.vimeo.com'
-      || host === 'picsum.photos';
+      || host === 'picsum.photos'
+      || host === 'trips.travelify.io'
+      || host === 'travelgenix-trips.vercel.app';
     return ok ? u.href : '';
   }
 
@@ -155,6 +159,27 @@
     '.rv-body{margin:0;color:#3a4b47;line-height:1.55;white-space:pre-line;font-size:14.5px}',
     '.rv-by{margin:8px 0 0;font-size:13px;color:#8c9894}',
     '.rv-empty{font-size:14px;color:#6b7671}',
+    // Departures list.
+    '.deps{font-family:var(--tg-font,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif);color:#12211f;max-width:520px}',
+    '.deps-empty{font-size:14px;color:#6b7671;padding:6px 0}',
+    '.dep{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid #e3e7ea}',
+    '.dep:last-child{border-bottom:0}',
+    '.dep-when{flex:1;min-width:0;font-size:14.5px;font-weight:600;line-height:1.25}',
+    '.dep-sub{display:block;font-weight:400;font-size:12.5px;color:#6b7671;margin-top:2px}',
+    '.dep-price{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;color:var(--tg-accent,#0e6e5c);white-space:nowrap}',
+    '.dep-book{font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:var(--tg-accent,#0e6e5c);border:0;border-radius:8px;padding:8px 14px;white-space:nowrap}',
+    '.dep-book:hover{filter:brightness(1.07)}',
+    '.dep-book:active{transform:translateY(1px)}',
+    '.dep-book:focus-visible{outline:2px solid var(--tg-accent,#0e6e5c);outline-offset:2px}',
+    '.dep-sold{font-size:12.5px;font-weight:600;color:#8c9894;white-space:nowrap}',
+    // Compact price + availability badge.
+    '.badge{display:inline-flex;align-items:center;gap:12px;font-family:var(--tg-font,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif);background:#fff;border:1px solid #e3e7ea;border-radius:999px;padding:7px 8px 7px 16px;box-shadow:0 8px 22px -14px rgba(18,33,31,.55)}',
+    '.badge-txt{font-size:13.5px;color:#3a4b47;line-height:1.2}',
+    '.badge-txt b{font-variant-numeric:tabular-nums;color:#12211f}',
+    '.badge-cta{font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;color:#fff;background:var(--tg-accent,#0e6e5c);border:0;border-radius:999px;padding:8px 16px}',
+    '.badge-cta:hover{filter:brightness(1.07)}',
+    '.badge-cta:active{transform:translateY(1px)}',
+    '.badge-cta:focus-visible{outline:2px solid var(--tg-accent,#0e6e5c);outline-offset:2px}',
     '.err{padding:16px 18px;font-size:13px;color:#6b7671;border:1px solid #e3e7ea;border-radius:12px;max-width:420px;background:#fff}',
   ].join('');
 
@@ -248,6 +273,78 @@
       openBooking(opts.base, op.slug, trip.slug, accent);
     });
     root.appendChild(btn);
+  }
+
+  // --- departures list -------------------------------------------------------
+
+  // Every open departure as a row: when, a small "N places left" nudge when it
+  // is getting tight, the price, and a Book button that opens the same overlay.
+  function renderDepartures(root, data, opts) {
+    addStyle(root);
+    var trip = data.trip || {};
+    var op = data.operator || {};
+    var accent = hexColour((op.brand || {}).primaryColour, '#0e6e5c');
+    var deps = data.departures || [];
+    var wrap = document.createElement('div');
+    wrap.className = 'deps';
+    wrap.style.setProperty('--tg-accent', accent);
+
+    if (!deps.length) {
+      wrap.innerHTML = '<div class="deps-empty">No dates on sale just now. Please check back soon.</div>';
+      root.appendChild(wrap);
+      return;
+    }
+
+    var rows = '';
+    for (var i = 0; i < deps.length; i++) {
+      var d = deps[i] || {};
+      var when = dateRange(d.startsOn, d.endsOn);
+      var price = money(d.pricePence, trip.currency);
+      var left = (typeof d.remaining === 'number' && d.remaining > 0 && d.remaining <= 6)
+        ? d.remaining + (d.remaining === 1 ? ' place left' : ' places left') : '';
+      rows += '<div class="dep"><span class="dep-when">' + esc(when) +
+        (left ? '<span class="dep-sub">' + esc(left) + '</span>' : '') + '</span>' +
+        (price ? '<span class="dep-price">' + esc(price) + '</span>' : '') +
+        (d.soldOut
+          ? '<span class="dep-sold">Sold out</span>'
+          : '<button class="dep-book" type="button">' + esc(opts.cta) + '</button>') +
+        '</div>';
+    }
+    // Every value above is esc()'d and the markup is static, so this innerHTML
+    // carries no untrusted string.
+    wrap.innerHTML = rows;
+    var btns = wrap.querySelectorAll('.dep-book');
+    for (var j = 0; j < btns.length; j++) {
+      btns[j].addEventListener('click', function () {
+        openBooking(opts.base, op.slug, trip.slug, accent);
+      });
+    }
+    root.appendChild(wrap);
+  }
+
+  // --- compact price + availability badge ------------------------------------
+
+  function renderBadge(root, data, opts) {
+    addStyle(root);
+    var trip = data.trip || {};
+    var op = data.operator || {};
+    var accent = hexColour((op.brand || {}).primaryColour, '#0e6e5c');
+    var deps = data.departures || [];
+    var price = fromPrice(deps, trip.currency);
+    var open = deps.filter(function (d) { return d && !d.soldOut; });
+
+    var badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.style.setProperty('--tg-accent', accent);
+
+    var txt = !open.length
+      ? '<span class="badge-txt">Sold out</span>'
+      : '<span class="badge-txt">' + (price ? 'from <b>' + esc(price) + '</b> · ' : '') + esc(nextDates(deps)) + '</span>';
+    badge.innerHTML = txt + (open.length ? '<button class="badge-cta" type="button">' + esc(opts.cta) + '</button>' : '');
+
+    var cta = badge.querySelector('.badge-cta');
+    if (cta) cta.addEventListener('click', function () { openBooking(opts.base, op.slug, trip.slug, accent); });
+    root.appendChild(badge);
   }
 
   // --- reviews ---------------------------------------------------------------
@@ -392,6 +489,8 @@
     var operatorSlug = el.getAttribute('data-tg-trips');
     var bookId = el.getAttribute('data-tg-book');
     var reviewsId = el.getAttribute('data-tg-reviews');
+    var depsId = el.getAttribute('data-tg-departures');
+    var badgeId = el.getAttribute('data-tg-badge');
     var tripId = el.getAttribute('data-tg-trip');
 
     if (reviewsId) {
@@ -417,22 +516,25 @@
       return;
     }
 
-    var id = bookId || tripId;
+    var id = bookId || depsId || badgeId || tripId;
     if (!id) { renderError(root, 'This trip could not be loaded.'); return; }
-    var opts = { base: base, cta: el.getAttribute('data-tg-cta') || (bookId ? 'Book now' : 'Reserve a place') };
+    var defaultCta = bookId ? 'Book now' : (depsId || badgeId) ? 'Book' : 'Reserve a place';
+    var opts = { base: base, cta: el.getAttribute('data-tg-cta') || defaultCta };
 
     fetch(base + '/api/v1/trips/' + encodeURIComponent(id), { credentials: 'omit' })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (data) {
         if (!data || !data.trip) { renderError(root, 'This trip is not available.'); return; }
-        if (bookId) renderButton(root, data, opts);
+        if (depsId) renderDepartures(root, data, opts);
+        else if (badgeId) renderBadge(root, data, opts);
+        else if (bookId) renderButton(root, data, opts);
         else renderCard(root, data, opts);
       })
       .catch(function () { renderError(root, 'This trip could not be loaded right now.'); });
   }
 
   function init() {
-    var nodes = document.querySelectorAll('[data-tg-trip],[data-tg-trips],[data-tg-book],[data-tg-reviews]');
+    var nodes = document.querySelectorAll('[data-tg-trip],[data-tg-trips],[data-tg-book],[data-tg-reviews],[data-tg-departures],[data-tg-badge]');
     for (var i = 0; i < nodes.length; i++) mount(nodes[i]);
   }
 

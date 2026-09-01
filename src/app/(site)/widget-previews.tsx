@@ -52,6 +52,31 @@ export function WidgetButton({ label = 'Book your place' }: { label?: string }) 
   return <span className="wg-book" style={accentVar}>{label}</span>;
 }
 
+type Departure = { when: string; sub?: string; price?: string; soldOut?: boolean };
+
+export function WidgetDepartures({ departures }: { departures: Departure[] }) {
+  return (
+    <div className="wg-deps" style={accentVar}>
+      {departures.map((d) => (
+        <div className="wg-dep" key={d.when}>
+          <span className="wg-dep-when">{d.when}{d.sub && <span className="wg-dep-sub">{d.sub}</span>}</span>
+          {d.price && <span className="wg-dep-price">{d.price}</span>}
+          {d.soldOut ? <span className="wg-dep-sold">Sold out</span> : <span className="wg-dep-book">Book</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function WidgetBadge({ price, note }: { price: string; note: string }) {
+  return (
+    <div className="wg-badge" style={accentVar}>
+      <span className="wg-badge-txt">from <b>{price}</b> · {note}</span>
+      <span className="wg-badge-cta">Book</span>
+    </div>
+  );
+}
+
 function Stars({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(100, (value / 5) * 100));
   return (
@@ -100,6 +125,12 @@ export const DEMO_GRID: Trip[] = [
   DEMO_CARD,
   { photo: '/photos/highlands.jpg', op: 'Global Travel Solution', title: 'Highlands Walking Week', where: 'Scotland  ·  7 nights', price: '£1,450', dates: '4 departures' },
   { photo: '/photos/amalfi.jpg', op: 'Global Travel Solution', title: 'Amalfi in Autumn', where: 'Italy  ·  6 nights', price: '£2,200', dates: 'Sep to Nov 2026' },
+];
+
+export const DEMO_DEPARTURES: Departure[] = [
+  { when: '24 Oct to 3 Nov 2026', price: '£3,700' },
+  { when: '12 Jan to 22 Jan 2027', sub: '4 places left', price: '£3,700' },
+  { when: '9 Mar to 19 Mar 2027', price: '£3,900', soldOut: true },
 ];
 
 export const DEMO_REVIEWS: Review[] = [

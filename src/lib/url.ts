@@ -21,6 +21,10 @@ const IMAGE_HOST_SUFFIXES = [
   '.public.blob.vercel-storage.com',
   'images.unsplash.com',
   'picsum.photos',
+  // Our own first-party asset origins (the /photos we host), so seed content and
+  // operators can use images we serve. Production alias plus the Vercel host.
+  'trips.travelify.io',
+  'travelgenix-trips.vercel.app',
 ];
 
 /**

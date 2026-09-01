@@ -399,6 +399,20 @@
 .wg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; width: 100%; }
 .wg-grid .wg-card { max-width: none; }
 .wg-book { --wg-accent: #1b2b5b; display: inline-block; font-size: 15px; font-weight: 600; color: #fff; background: var(--wg-accent); border-radius: 9px; padding: 12px 20px; line-height: 1.2; }
+/* departures list preview */
+.wg-deps { --wg-accent: #1b2b5b; width: 100%; max-width: 520px; color: #12211f; }
+.wg-deps .wg-dep { display: flex; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid #e3e7ea; }
+.wg-deps .wg-dep:last-child { border-bottom: 0; }
+.wg-dep-when { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.25; }
+.wg-dep-sub { display: block; font-weight: 400; font-size: 12.5px; color: #6b7671; margin-top: 2px; }
+.wg-dep-price { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; color: var(--wg-accent); white-space: nowrap; }
+.wg-dep-book { font-size: 13px; font-weight: 600; color: #fff; background: var(--wg-accent); border-radius: 8px; padding: 8px 14px; white-space: nowrap; }
+.wg-dep-sold { font-size: 12.5px; font-weight: 600; color: #8c9894; white-space: nowrap; }
+/* price + availability badge preview */
+.wg-badge { --wg-accent: #1b2b5b; display: inline-flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e3e7ea; border-radius: 999px; padding: 7px 8px 7px 16px; box-shadow: 0 8px 22px -14px rgba(18,33,31,.55); }
+.wg-badge-txt { font-size: 13.5px; color: #3a4b47; line-height: 1.2; }
+.wg-badge-txt b { font-variant-numeric: tabular-nums; color: #12211f; }
+.wg-badge-cta { font-size: 13.5px; font-weight: 600; color: #fff; background: var(--wg-accent); border-radius: 999px; padding: 8px 16px; }
 .wg-book-stage { text-align: center; }
 .wg-book-stage .wg-book-lead { font-size: 14px; color: var(--m-ink-2); margin: 0 0 16px; max-width: none; }
 .wg-revw { width: 100%; max-width: 560px; color: #12211f; }
