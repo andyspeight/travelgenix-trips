@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Icon, IconCheck, IconArrow } from './site-chrome';
-import { Mockup } from './mockups';
+import { Visual } from './mockups';
 import type { PageContent } from './content';
 
 // The index listing for /features and /solutions: a header plus a card grid.
@@ -67,7 +67,7 @@ export function ContentPage({
                 </ul>
               )}
             </div>
-            <div className="m-split-visual"><Mockup name={content.visuals?.[i] ?? content.visuals?.[0] ?? 'console'} /></div>
+            <div className="m-split-visual"><Visual name={content.visuals?.[i] ?? content.visuals?.[0] ?? 'console'} /></div>
           </div>
         </section>
       ))}

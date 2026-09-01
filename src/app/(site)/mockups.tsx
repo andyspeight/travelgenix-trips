@@ -243,3 +243,37 @@ export function Mockup({ name }: { name: string }) {
   const M = MOCKS[name] ?? Console;
   return <M />;
 }
+
+// Real product screenshots, captured from the live console and traveller pages
+// (see docs/trips-platform-handover.md). Where a visual name has a real shot it
+// is shown; every other name still renders its CSS mockup above, so the layout
+// slot is identical either way and the page never has an empty visual.
+const REAL: Record<string, { src: string; w: number; h: number; alt: string }> = {
+  reports: { src: '/shots/reports.png', w: 1880, h: 1312, alt: 'Cross-trip reporting: booked, collected and outstanding across every trip' },
+  bookings: { src: '/shots/bookings.png', w: 1880, h: 876, alt: 'The bookings list in the operator console, with reference, status and money' },
+  integrations: { src: '/shots/integrations.png', w: 1880, h: 2142, alt: 'Webhooks and API keys set up in the console' },
+  branding: { src: '/shots/branding.png', w: 1880, h: 1568, alt: 'Branding settings, with a live preview of a headed public page' },
+  hub: { src: '/shots/booked.png', w: 1800, h: 2000, alt: 'A traveller’s booking confirmation hub, in the operator’s brand' },
+  console: { src: '/shots/console.png', w: 1880, h: 1228, alt: 'The trips list in the operator console' },
+};
+
+// The visual slot on a feature or solution page: a real screenshot when we have
+// one, otherwise the CSS mockup of the same name.
+export function Visual({ name }: { name: string }) {
+  const real = REAL[name];
+  if (!real) return <Mockup name={name} />;
+  return (
+    // A static asset from /public; plain img keeps static export simple.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="m-shot"
+      src={real.src}
+      width={real.w}
+      height={real.h}
+      alt={real.alt}
+      loading="lazy"
+      decoding="async"
+      style={{ display: 'block', width: '100%', height: 'auto' }}
+    />
+  );
+}
