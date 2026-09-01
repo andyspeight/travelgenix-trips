@@ -49,6 +49,20 @@ export interface OperatorBrand {
   replyTo?: string;
 }
 
+/** A demo / access request from the public marketing site. */
+export interface Lead {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string;
+  phone: string | null;
+  volume_band: string | null;
+  message: string | null;
+  source: string;
+  handled: boolean;
+  created_at: string;
+}
+
 /** One API key row. The key itself is never stored — only key_hash — so this is
  *  what a list view shows: the visible prefix, an optional name, and usage. A
  *  revoked_at makes the key stop working without losing its audit trail. */

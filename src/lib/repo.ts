@@ -19,7 +19,7 @@ import 'server-only';
 import { sbRequest, sbInsert, sbUpdate, SupabaseError } from './supabase.ts';
 import { slugify } from './validate.ts';
 import { format as fmtMoney } from './money.ts';
-import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput, ReviewInput, TaskInput } from './validate.ts';
+import type { TripInput, DepartureInput, PackageInput, WaitlistInput, PromoInput, OptionInput, ReviewInput, TaskInput, LeadInput } from './validate.ts';
 import { summariseRatings } from './reviews.ts';
 import { shortRange } from './participants.ts';
 import type { BookingFinanceRow } from './finance.ts';
@@ -27,7 +27,7 @@ import { newReference } from './booking.ts';
 import { holdPlaces, type HoldRequest, type HoldOutcome, type HeldBooking, type RpcResult } from './hold.ts';
 import { sha256Hex, isRegistrationComplete, type WaiverInput, type ValidatedRegistration } from './registration.ts';
 import { sendEmail } from './notify.ts';
-import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem, Webhook, ApiKey } from './types.ts';
+import type { Operator, OperatorBrand, Trip, Departure, TripStatus, Traveller, FormRow, Waiver, RegField, Package, WaitlistEntry, MessageTemplate, TripMessage, PromoCode, TripOption, SelectedOption, TripDocument, OperatorMember, OperatorRole, Review, ReviewStatus, ReviewSummary, TripTask, ChecklistItem, Webhook, ApiKey, Lead } from './types.ts';
 import { hashApiKey, keyPrefix } from './apikeys.ts';
 import { deleteDocument } from './storage.ts';
 import { resolveOperatorRole, emailKey } from './members.ts';
@@ -2274,6 +2274,21 @@ export async function findOperatorIdByApiKey(key: string): Promise<string | null
   // Best-effort usage touch; never blocks or fails the request.
   void sbUpdate('gt_api_keys', `id=eq.${row.id}`, { last_used_at: nowIso() }).catch(() => []);
   return row.operator_id;
+}
+
+/** Store a demo / access request from the public marketing site. Returns the
+ *  new row, or null if it could not be written. The form is the only writer. */
+export async function createLead(input: LeadInput & { source?: string }): Promise<Lead | null> {
+  const rows = await sbInsert<Lead>('gt_leads', {
+    name: input.name,
+    company: input.company,
+    email: input.email,
+    phone: input.phone,
+    volume_band: input.volume_band,
+    message: input.message,
+    source: input.source || 'website',
+  }).catch(() => []);
+  return rows[0] ?? null;
 }
 
 /** The white-label toggle: hide or show the Powered by credit on public pages. */

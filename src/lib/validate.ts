@@ -537,3 +537,42 @@ export function validatePackage(raw: Record<string, unknown>): Validated<Package
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+//  Lead capture — the "book a demo" form on the public marketing site.
+// ---------------------------------------------------------------------------
+
+export interface LeadInput {
+  name: string;
+  company: string | null;
+  email: string;
+  phone: string | null;
+  volume_band: string | null;
+  message: string | null;
+}
+
+const LEAD_VOLUME_BANDS = ['under-75k', '75k-400k', 'over-400k', 'not-sure'] as const;
+
+export function validateLead(raw: Record<string, unknown>): Validated<LeadInput> {
+  const errors: FieldErrors = {};
+
+  const name = text(raw.name);
+  if (!name) errors.name = 'Please tell us your name.';
+  else if (name.length > 120) errors.name = 'That name is too long.';
+
+  const email = text(raw.email);
+  if (!email) errors.email = 'We need an email to get back to you.';
+  else if (!looksLikeEmail(email)) errors.email = 'That email does not look right.';
+
+  const company = text(raw.company).slice(0, 160) || null;
+  const phone = text(raw.phone).slice(0, 40) || null;
+  const message = text(raw.message).slice(0, 2000) || null;
+  const bandRaw = text(raw.volume_band);
+  const volume_band = (LEAD_VOLUME_BANDS as readonly string[]).includes(bandRaw) ? bandRaw : null;
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: { name: name.slice(0, 120), company, email: email.slice(0, 200), phone, volume_band, message },
+  };
+}
