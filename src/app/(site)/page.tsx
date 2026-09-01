@@ -38,7 +38,7 @@ export default function Home() {
                 <span className="m-shot-url">yourbrand.com/trips/kenya-safari</span>
               </div>
               <div className="m-shot-body">
-                <div className="m-shot-cover" />
+                <div className="m-shot-cover" style={{ backgroundImage: 'url(/photos/safari.jpg)' }} />
                 <div className="m-shot-inner">
                   <h3>Kenya Johari na Bahari Safari</h3>
                   <p className="m-shot-op">Global Travel Solution</p>

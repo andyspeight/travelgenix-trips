@@ -71,6 +71,7 @@ export function SiteNav() {
         <div className="m-nav-links">
           <Link href="/features">Features</Link>
           <Link href="/solutions">Who it is for</Link>
+          <Link href="/widgets">Widgets</Link>
           <Link href="/pricing">Pricing</Link>
           <Link href="/compare/wetravel">vs WeTravel</Link>
         </div>
@@ -110,6 +111,7 @@ export function SiteFooter() {
           <div className="m-foot-col">
             <h4>Company</h4>
             <Link href="/about">About</Link>
+            <Link href="/widgets">Widget gallery</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/compare/wetravel">vs WeTravel</Link>
             <Link href="/faq">FAQ</Link>

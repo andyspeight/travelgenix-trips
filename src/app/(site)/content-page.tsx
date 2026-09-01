@@ -55,6 +55,15 @@ export function ContentPage({
         </div>
       </section>
 
+      {content.photo && (
+        <div
+          className="m-photoband"
+          style={{ backgroundImage: `url(${content.photo})` }}
+          role="img"
+          aria-label={content.title}
+        />
+      )}
+
       {content.splits.map((s, i) => (
         <section className={`m-split${i % 2 === 1 ? ' m-split--rev' : ''}`} key={s.title}>
           <div className="m-wrap">

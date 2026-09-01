@@ -27,6 +27,7 @@ export interface PageContent {
   title: string;     // hero heading
   lede: string;      // hero sub-line
   card: string;      // one-line description on the index grid
+  photo?: string;    // optional full-bleed hero photo under the page hero (see /public/photos)
   visuals?: string[]; // mockup name per split (see mockups.tsx); falls back to console
   splits: Split[];   // alternating rows
   benefitsHead?: string;
@@ -38,6 +39,7 @@ export interface PageContent {
 export const FEATURES: PageContent[] = [
   {
     slug: 'payments',
+    photo: '/photos/coast.jpg',
     visuals: ['reports','bookings'],
     nav: 'Payments',
     icon: 'wallet',
@@ -73,6 +75,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'trip-pages',
+    photo: '/photos/safari.jpg',
     visuals: ['trip','import'],
     nav: 'Trip pages',
     icon: 'page',
@@ -108,6 +111,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'bookings',
+    photo: '/photos/amalfi.jpg',
     visuals: ['bookings','bookingForm'],
     nav: 'Bookings',
     icon: 'ticket',
@@ -143,6 +147,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'registration',
+    photo: '/photos/highlands.jpg',
     visuals: ['registration','hub'],
     nav: 'Registration',
     icon: 'shield',
@@ -178,6 +183,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'traveller-app',
+    photo: '/photos/retreat.jpg',
     visuals: ['hub','trip'],
     nav: 'Traveller hub',
     icon: 'phone',
@@ -213,7 +219,8 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'widgets',
-    visuals: ['widget','trip'],
+    photo: '/photos/trek.jpg',
+    visuals: ['wgcard','wggrid'],
     nav: 'Widgets',
     icon: 'layers',
     title: 'Sell on your own website',
@@ -248,6 +255,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'ai-import',
+    photo: '/photos/amalfi.jpg',
     visuals: ['import','trip'],
     nav: 'AI import',
     icon: 'sparkle',
@@ -283,6 +291,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'integrations',
+    photo: '/photos/coast.jpg',
     visuals: ['integrations','bookings'],
     nav: 'API and webhooks',
     icon: 'plug',
@@ -318,6 +327,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'white-label',
+    photo: '/photos/retreat.jpg',
     visuals: ['branding','trip'],
     nav: 'White-label',
     icon: 'palette',
@@ -353,6 +363,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'reporting',
+    photo: '/photos/highlands.jpg',
     visuals: ['reports','bookings'],
     nav: 'Reporting',
     icon: 'chart',
@@ -393,6 +404,7 @@ export const FEATURES: PageContent[] = [
 export const SOLUTIONS: PageContent[] = [
   {
     slug: 'travel-agents',
+    photo: '/photos/safari.jpg',
     visuals: ['trip','reports'],
     nav: 'Travel agents',
     icon: 'handshake',
@@ -423,6 +435,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'tour-operators',
+    photo: '/photos/coast.jpg',
     visuals: ['console','bookings'],
     nav: 'Tour operators',
     icon: 'route',
@@ -458,6 +471,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'retreats-wellness',
+    photo: '/photos/retreat.jpg',
     visuals: ['trip','registration'],
     nav: 'Retreats and wellness',
     icon: 'sparkle',
@@ -488,6 +502,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'school-group-trips',
+    photo: '/photos/highlands.jpg',
     visuals: ['registration','hub'],
     nav: 'School and group trips',
     icon: 'users',
@@ -518,6 +533,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'adventure-active',
+    photo: '/photos/trek.jpg',
     visuals: ['trip','registration'],
     nav: 'Adventure and active',
     icon: 'map',

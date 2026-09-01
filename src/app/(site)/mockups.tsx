@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { IconCheck } from './site-chrome';
+import { WidgetCardDemo, WidgetGridDemo } from './widget-previews';
 
 function Browser({ url, children }: { url: string; children: React.ReactNode }) {
   return (
@@ -39,7 +40,7 @@ function App({ tab, children }: { tab: string; children: React.ReactNode }) {
 function Trip() {
   return (
     <Browser url="yourbrand.com/trips/kenya-safari">
-      <div className="mk-cover" />
+      <div className="mk-cover" style={{ backgroundImage: 'url(/photos/safari.jpg)' }} />
       <div className="mk-h">Kenya Johari na Bahari Safari</div>
       <div className="mk-sub">Global Travel Solution · 10 nights, small group</div>
       <div className="mk-list">
@@ -199,7 +200,7 @@ function Widget() {
 <script src="trips.travelify.io/`}<span className="k">embed.js</span>{`"></script>`}</div>
       <div className="mk" aria-hidden="true">
         <div className="mk-body">
-          <div className="mk-cover" style={{ height: 70 }} />
+          <div className="mk-cover" style={{ height: 70, backgroundImage: 'url(/photos/coast.jpg)' }} />
           <div className="mk-h2">Kenya Johari na Bahari Safari</div>
           <div className="mk-li"><span className="grow mk-sub">from</span><span className="mk-money">£3,700</span></div>
           <div className="mk-btn">Book your place</div>
@@ -224,7 +225,7 @@ function Import() {
       <div className="mk-arrow">↓</div>
       <div className="mk" aria-hidden="true">
         <div className="mk-body">
-          <div className="mk-cover" style={{ height: 56 }} />
+          <div className="mk-cover" style={{ height: 56, backgroundImage: 'url(/photos/coast.jpg)' }} />
           <div className="mk-h2">Kenya Johari na Bahari Safari <span className="mk-pill mut">Draft</span></div>
           <div className="mk-sub">Day 1 · Day 2 · Day 3 …</div>
         </div>
@@ -257,9 +258,17 @@ const REAL: Record<string, { src: string; w: number; h: number; alt: string }> =
   console: { src: '/shots/console.png', w: 1880, h: 1228, alt: 'The trips list in the operator console' },
 };
 
-// The visual slot on a feature or solution page: a real screenshot when we have
-// one, otherwise the CSS mockup of the same name.
+// Faithful renders of the real embed widgets, for pages that showcase them.
+const WIDGET_PREVIEWS: Record<string, () => React.ReactNode> = {
+  wgcard: WidgetCardDemo,
+  wggrid: WidgetGridDemo,
+};
+
+// The visual slot on a feature or solution page: a live widget preview, else a
+// real screenshot when we have one, otherwise the CSS mockup of the same name.
 export function Visual({ name }: { name: string }) {
+  const W = WIDGET_PREVIEWS[name];
+  if (W) return <W />;
   const real = REAL[name];
   if (!real) return <Mockup name={name} />;
   return (
