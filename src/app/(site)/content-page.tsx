@@ -1,35 +1,7 @@
 import Link from 'next/link';
 import { Icon, IconCheck, IconArrow } from './site-chrome';
+import { Mockup } from './mockups';
 import type { PageContent } from './content';
-
-// A decorative CSS panel that stands in for a product screenshot, so a feature
-// page needs no external image. Varies its innards a little by index.
-function Panel({ variant }: { variant: number }) {
-  return (
-    <div className="m-panel" aria-hidden="true">
-      <div className="m-panel-top" />
-      <div className="m-panel-body">
-        <span className="m-panel-chip"><Icon name="check" size={15} /> Live in your console</span>
-        <div className="m-panel-line m" />
-        <div className="m-panel-line s" />
-        {variant % 2 === 0 ? (
-          <div className="m-panel-tiles">
-            <div className="m-panel-tile">Booked<b>128</b></div>
-            <div className="m-panel-tile">Collected<b>£46,200</b></div>
-            <div className="m-panel-tile">Travellers<b>312</b></div>
-            <div className="m-panel-tile">Trips live<b>9</b></div>
-          </div>
-        ) : (
-          <>
-            <div className="m-panel-line m" />
-            <div className="m-panel-line s" />
-            <div className="m-panel-line m" />
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // The index listing for /features and /solutions: a header plus a card grid.
 export function CardIndex({
@@ -95,7 +67,7 @@ export function ContentPage({
                 </ul>
               )}
             </div>
-            <div className="m-split-visual"><Panel variant={i} /></div>
+            <div className="m-split-visual"><Mockup name={content.visuals?.[i] ?? content.visuals?.[0] ?? 'console'} /></div>
           </div>
         </section>
       ))}

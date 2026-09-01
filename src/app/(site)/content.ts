@@ -27,6 +27,7 @@ export interface PageContent {
   title: string;     // hero heading
   lede: string;      // hero sub-line
   card: string;      // one-line description on the index grid
+  visuals?: string[]; // mockup name per split (see mockups.tsx); falls back to console
   splits: Split[];   // alternating rows
   benefitsHead?: string;
   benefits?: Benefit[];
@@ -37,6 +38,7 @@ export interface PageContent {
 export const FEATURES: PageContent[] = [
   {
     slug: 'payments',
+    visuals: ['reports','bookings'],
     nav: 'Payments',
     icon: 'wallet',
     title: 'Your money is yours',
@@ -71,6 +73,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'trip-pages',
+    visuals: ['trip','import'],
     nav: 'Trip pages',
     icon: 'page',
     title: 'A trip page that sells',
@@ -105,6 +108,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'bookings',
+    visuals: ['bookings','bookingForm'],
     nav: 'Bookings',
     icon: 'ticket',
     title: 'Bookings and deposits, without the oversell',
@@ -139,6 +143,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'registration',
+    visuals: ['registration','hub'],
     nav: 'Registration',
     icon: 'shield',
     title: 'Collect everything you need, once',
@@ -173,6 +178,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'traveller-app',
+    visuals: ['hub','trip'],
     nav: 'Traveller hub',
     icon: 'phone',
     title: 'Travellers get an app, not a receipt',
@@ -207,6 +213,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'widgets',
+    visuals: ['widget','trip'],
     nav: 'Widgets',
     icon: 'layers',
     title: 'Sell on your own website',
@@ -241,6 +248,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'ai-import',
+    visuals: ['import','trip'],
     nav: 'AI import',
     icon: 'sparkle',
     title: 'Turn a brochure into a trip page',
@@ -275,6 +283,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'integrations',
+    visuals: ['integrations','bookings'],
     nav: 'API and webhooks',
     icon: 'plug',
     title: 'Wire Trips into everything else',
@@ -309,6 +318,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'white-label',
+    visuals: ['branding','trip'],
     nav: 'White-label',
     icon: 'palette',
     title: 'It looks like you, not like us',
@@ -343,6 +353,7 @@ export const FEATURES: PageContent[] = [
   },
   {
     slug: 'reporting',
+    visuals: ['reports','bookings'],
     nav: 'Reporting',
     icon: 'chart',
     title: 'Know where you stand',
@@ -382,6 +393,7 @@ export const FEATURES: PageContent[] = [
 export const SOLUTIONS: PageContent[] = [
   {
     slug: 'travel-agents',
+    visuals: ['trip','reports'],
     nav: 'Travel agents',
     icon: 'handshake',
     title: 'Group travel, without giving away your margin',
@@ -411,6 +423,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'tour-operators',
+    visuals: ['console','bookings'],
     nav: 'Tour operators',
     icon: 'route',
     title: 'Run your whole programme in one place',
@@ -445,6 +458,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'retreats-wellness',
+    visuals: ['trip','registration'],
     nav: 'Retreats and wellness',
     icon: 'sparkle',
     title: 'Fill your retreats, keep the calm',
@@ -474,6 +488,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'school-group-trips',
+    visuals: ['registration','hub'],
     nav: 'School and group trips',
     icon: 'users',
     title: 'Group trips with the paperwork under control',
@@ -503,6 +518,7 @@ export const SOLUTIONS: PageContent[] = [
   },
   {
     slug: 'adventure-active',
+    visuals: ['trip','registration'],
     nav: 'Adventure and active',
     icon: 'map',
     title: 'Sell the adventure, handle the logistics',

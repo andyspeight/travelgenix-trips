@@ -310,3 +310,58 @@
   .m-cards { gap: 14px; }
   .m-stats-row { gap: 28px; }
 }
+
+/* =============================================================================
+   Product mockups (mk-) — realistic CSS renders of the actual screens, used as
+   the feature-page visuals. No external images. Swap in real screenshots later
+   by replacing <Mockup> with an <img>.
+   ============================================================================= */
+.mk { border: 1px solid var(--m-rule); border-radius: 14px; overflow: hidden; box-shadow: var(--m-shadow-md); background: #fff; font-size: 12.5px; color: var(--m-ink); }
+.mk-bar { display: flex; align-items: center; gap: 6px; padding: 10px 13px; border-bottom: 1px solid var(--m-rule); background: #fbfbfa; }
+.mk-dot { width: 9px; height: 9px; border-radius: 50%; background: #dfe3e6; }
+.mk-url { margin-left: 8px; font-size: 11px; color: var(--m-muted); background: #fff; border: 1px solid var(--m-rule); border-radius: 5px; padding: 3px 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 74%; }
+.mk-app { display: flex; align-items: center; gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--m-rule); }
+.mk-app b { font-weight: 700; letter-spacing: -.01em; }
+.mk-tabs { display: flex; gap: 14px; margin-left: 4px; color: var(--m-muted); }
+.mk-tabs span { padding-bottom: 2px; }
+.mk-tabs .on { color: var(--m-accent-ink); border-bottom: 2px solid var(--m-accent); font-weight: 600; }
+.mk-body { padding: 16px; display: flex; flex-direction: column; gap: 11px; }
+.mk-cover { height: 92px; border-radius: 8px; background: linear-gradient(120deg, #17604f, #0e6e5c 55%, #2f8a76); }
+.mk-h { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.mk-h2 { font-size: 13.5px; font-weight: 600; }
+.mk-sub { color: var(--m-muted); font-size: 11.5px; }
+.mk-money { font-variant-numeric: tabular-nums; font-weight: 700; }
+.mk-btn { background: var(--m-accent); color: #fff; border-radius: 7px; text-align: center; padding: 9px; font-weight: 600; font-size: 12.5px; }
+.mk-btn.ghost { background: #fff; color: var(--m-ink); border: 1px solid var(--m-rule); }
+.mk-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 9px; font-size: 10.5px; font-weight: 600; }
+.mk-pill.ok { background: var(--m-accent-wash); color: var(--m-accent-ink); }
+.mk-pill.warn { background: #fdf0e3; color: #8a5a12; }
+.mk-pill.mut { background: var(--m-paper); color: var(--m-muted); }
+.mk-list { display: flex; flex-direction: column; }
+.mk-li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--m-rule); }
+.mk-li:last-child { border-bottom: 0; }
+.mk-li .grow { flex: 1; min-width: 0; }
+.mk-li .grow small { display: block; color: var(--m-muted); font-size: 11px; }
+.mk-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.mk-tile { border: 1px solid var(--m-rule); border-radius: 9px; padding: 10px 11px; }
+.mk-tile small { color: var(--m-muted); font-size: 10.5px; }
+.mk-tile b { display: block; font-size: 17px; margin-top: 2px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.mk-tile b.accent { color: var(--m-accent-ink); }
+.mk-bars { display: flex; align-items: flex-end; gap: 8px; height: 72px; padding-top: 6px; }
+.mk-bars i { flex: 1; background: color-mix(in oklab, var(--m-accent) 30%, #dfeee9); border-radius: 4px 4px 0 0; }
+.mk-bars i.hi { background: var(--m-accent); }
+.mk-field { border: 1px solid var(--m-rule); border-radius: 7px; padding: 8px 10px; color: var(--m-muted); background: #fff; display: flex; justify-content: space-between; align-items: center; }
+.mk-field .val { color: var(--m-ink); font-weight: 500; }
+.mk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.mk-code { background: #10201b; color: #cfeee3; border-radius: 8px; padding: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.mk-code .k { color: #8fd3bd; }
+.mk-toggle { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--m-rule); border-radius: 9px; padding: 10px 12px; }
+.mk-sw { width: 34px; height: 20px; border-radius: 999px; background: var(--m-accent); position: relative; flex: none; }
+.mk-sw::after { content: ""; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+.mk-swatches { display: flex; gap: 7px; }
+.mk-swatch { width: 26px; height: 26px; border-radius: 7px; border: 1px solid rgba(0,0,0,.06); }
+.mk-tick { width: 40px; height: 40px; border-radius: 50%; background: var(--m-accent-wash); color: var(--m-accent-ink); display: flex; align-items: center; justify-content: center; }
+.mk-check { display: flex; align-items: center; gap: 9px; }
+.mk-box { width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid var(--m-rule); flex: none; }
+.mk-box.on { background: var(--m-accent); border-color: var(--m-accent); }
+.mk-arrow { display: flex; align-items: center; justify-content: center; color: var(--m-muted); }
